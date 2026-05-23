@@ -1,0 +1,25 @@
+"use client";
+
+import { userProfile } from "@/data/mockData";
+
+export default function TopAppBar() {
+  return (
+    <header className="bg-surface w-full sticky top-0 z-40 border-b border-outline-variant flex justify-between items-center h-16 px-container-margin">
+      <div className="flex items-center gap-3">
+        <span className="material-symbols-outlined text-primary cursor-pointer active:opacity-80 transition-opacity">
+          menu
+        </span>
+        <h1 className="font-headline text-headline-md text-primary font-semibold">
+          Pengajuan Jadwal
+        </h1>
+      </div>
+      <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center overflow-hidden border border-outline-variant">
+        <img
+          alt={userProfile.name}
+          className="w-full h-full object-cover"
+          src={userProfile.imageUrl}
+        />
+      </div>
+    </header>
+  );
+}
