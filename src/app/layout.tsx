@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Hanken_Grotesk, Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/lib/authContext";
 
 const hankenGrotesk = Hanken_Grotesk({
   variable: "--font-hanken-grotesk",
@@ -15,8 +16,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ShiftMaster Pro - Pengajuan Jadwal",
-  description: "Aplikasi pengajuan jadwal shift kerja",
+  title: "ShiftMaster Pro - Sistem Manajemen Jadwal Shift",
+  description: "Aplikasi pengajuan dan pengelolaan jadwal shift kerja",
 };
 
 export default function RootLayout({
@@ -37,7 +38,7 @@ export default function RootLayout({
       <body
         className={`${hankenGrotesk.variable} ${inter.variable} font-body antialiased`}
       >
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String    @id @default(cuid())
+  nip               String    @unique
+  name              String
+  email             String?   @unique
+  password          String
+  role              Role      @default(EMPLOYEE)
+  position          String?
+  avatarUrl         String?
+  isActive          Boolean   @default(true)
+  leaveBalance      LeaveBalance?
+  shiftRequests     ShiftRequest[]
+  shiftAssignments  ShiftAssignment[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+model LeaveBalance {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  annualLeave     Int      @default(12)
+  sickLeave       Int      @default(5)
+  compensation    Int      @default(2)
+  updatedAt       DateTime @updatedAt
+}
+
+model ShiftRequest {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        RequestType
+  startDate   DateTime
+  endDate     DateTime?
+  description String?
+  status      RequestStatus   @default(PENDING)
+  adminNotes  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+enum RequestType {
+  SHIFT_PAGI
+  SHIFT_MALAM
+  CUTI_TAHUNAN
+  TUKAR_SHIFT
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model ShiftAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  shiftType   ShiftType
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+enum ShiftType {
+  PAGI
+  SIANG
+  MALAM
+  OFF
+  LIBUR
+}
+
+model MonthlyStats {
+  id              String   @id @default(cuid())
+  month           Int
+  year            Int
+  totalWorkDays   Int      @default(22)
+  attendanceRate  Float    @default(98.5)
+  overtimeHours   Float    @default(0)
+  morningCount    Int      @default(0)
+  afternoonCount  Int      @default(0)
+  nightCount      Int      @default(0)
+
+  @@unique([month, year])
+}

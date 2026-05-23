@@ -79,10 +79,10 @@ export const shiftLegend = [
 
 // Navigation items
 export const navItems = [
-  { icon: "calendar_view_month", label: "Roster", isActive: true },
-  { icon: "groups", label: "Staff", isActive: false },
-  { icon: "assignment_late", label: "Requests", isActive: false },
-  { icon: "person", label: "Profile", isActive: false },
+  { icon: "calendar_view_month", label: "Roster", href: "/", isActive: true },
+  { icon: "groups", label: "Staff", href: "/login" },
+  { icon: "assignment_late", label: "Requests", href: "/pegawai" },
+  { icon: "person", label: "Profile", href: "/login" },
 ];
 
 // User profile

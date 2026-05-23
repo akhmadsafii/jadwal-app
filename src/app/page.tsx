@@ -1,30 +1,28 @@
-import TopAppBar from "@/components/TopAppBar";
-import LeaveBalanceCards from "@/components/LeaveBalanceCards";
-import RequestForm from "@/components/RequestForm";
-import UrgentNeedsSection from "@/components/UrgentNeedsSection";
-import RecentRequests from "@/components/RecentRequests";
-import BottomNavBar from "@/components/BottomNavBar";
+import TopAppBar from "@/components/public/PublicTopBar";
+import MonthSelector from "@/components/public/MonthSelector";
+import ScheduleGrid from "@/components/public/ScheduleGrid";
+import ShiftLegend from "@/components/public/ShiftLegend";
+import StatsSection from "@/components/public/StatsSection";
+import PublicBottomNav from "@/components/public/PublicBottomNav";
 
 export default function Home() {
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-[140px]">
       <TopAppBar />
 
-      <main className="px-container-margin py-4 space-y-4">
-        {/* Leave Balance Cards */}
-        <LeaveBalanceCards />
-
-        {/* Request Form */}
-        <RequestForm />
-
-        {/* Urgent Needs Section */}
-        <UrgentNeedsSection />
-
-        {/* Recent Requests */}
-        <RecentRequests />
+      <main className="pt-14">
+        <MonthSelector />
+        <ScheduleGrid />
+        <ShiftLegend />
+        <StatsSection />
       </main>
 
-      <BottomNavBar />
+      {/* FAB */}
+      <button className="fixed bottom-24 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform z-40">
+        <span className="material-symbols-outlined text-[32px]">add</span>
+      </button>
+
+      <PublicBottomNav />
     </div>
   );
 }

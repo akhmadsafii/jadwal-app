@@ -2,24 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navItems } from "@/data/publicData";
+import { employeeNavItems } from "@/data/employeeData";
 
-export default function PublicBottomNav() {
+export default function EmployeeBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 w-full z-50 h-[72px] bg-surface border-t border-outline-variant flex justify-around items-center pb-6 shadow-sm">
-      {navItems.map((item, idx) => {
+    <nav className="fixed bottom-0 left-0 right-0 flex justify-around items-center px-4 pb-6 bg-surface border-t border-outline-variant h-20 z-50 shadow-sm">
+      {employeeNavItems.map((item, idx) => {
         const isActive = pathname === item.href;
 
         return (
           <Link
             key={idx}
             href={item.href}
-            className={`flex flex-col items-center justify-center px-4 py-1 transition-all ${
+            className={`flex flex-col items-center justify-center px-5 py-1 transition-transform duration-150 active:scale-90 ${
               isActive
-                ? "bg-primary-container text-on-primary-container rounded-full"
-                : "text-on-surface-variant hover:bg-surface-container-highest"
+                ? "bg-secondary-container text-on-secondary-container rounded-full scale-95"
+                : "text-on-surface-variant hover:bg-surface-container-high"
             }`}
           >
             <span
