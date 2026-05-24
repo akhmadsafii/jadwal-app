@@ -1,39 +1,72 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getCurrentMonthInfo } from "@/data/publicData";
 
 interface MonthSelectorProps {
   onMonthChange?: (month: number, year: number) => void;
+  selectedMonth?: number;
+  selectedYear?: number;
 }
 
-export default function MonthSelector({ onMonthChange }: MonthSelectorProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [monthInfo, setMonthInfo] = useState(getCurrentMonthInfo(new Date()));
+export default function MonthSelector({ onMonthChange, selectedMonth, selectedYear }: MonthSelectorProps) {
+  // Use external state if provided, otherwise use internal state
+  const initialDate = selectedMonth && selectedYear
+    ? new Date(selectedYear, selectedMonth - 1, 1)
+    : new Date();
+
+  const [currentDate, setCurrentDate] = useState(initialDate);
+  const [monthInfo, setMonthInfo] = useState(getCurrentMonthInfo(initialDate));
+  const onMonthChangeRef = useRef(onMonthChange);
+  const hasInitialized = useRef(false);
+
+  // Keep ref updated
+  useEffect(() => {
+    onMonthChangeRef.current = onMonthChange;
+  }, [onMonthChange]);
+
+  // Sync with external state changes
+  useEffect(() => {
+    if (selectedMonth && selectedYear) {
+      const newDate = new Date(selectedYear, selectedMonth - 1, 1);
+      if (newDate.getTime() !== currentDate.getTime()) {
+        setCurrentDate(newDate);
+        setMonthInfo(getCurrentMonthInfo(newDate));
+      }
+    }
+  }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
     setMonthInfo(getCurrentMonthInfo(currentDate));
-    onMonthChange?.(currentDate.getMonth() + 1, currentDate.getFullYear());
-  }, [currentDate, onMonthChange]);
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      onMonthChangeRef.current?.(currentDate.getMonth() + 1, currentDate.getFullYear());
+    }
+  }, [currentDate]);
 
   const goToPrevMonth = () => {
     setCurrentDate((prev) => {
-      const newDate = new Date(prev);
-      newDate.setMonth(prev.getMonth() - 1);
+      const newDate = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
+      setMonthInfo(getCurrentMonthInfo(newDate));
+      onMonthChangeRef.current?.(newDate.getMonth() + 1, newDate.getFullYear());
       return newDate;
     });
   };
 
   const goToNextMonth = () => {
     setCurrentDate((prev) => {
-      const newDate = new Date(prev);
-      newDate.setMonth(prev.getMonth() + 1);
+      const newDate = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
+      setMonthInfo(getCurrentMonthInfo(newDate));
+      onMonthChangeRef.current?.(newDate.getMonth() + 1, newDate.getFullYear());
       return newDate;
     });
   };
 
   const goToCurrentMonth = () => {
-    setCurrentDate(new Date());
+    const now = new Date();
+    setCurrentDate(now);
+    setMonthInfo(getCurrentMonthInfo(now));
+    onMonthChangeRef.current?.(now.getMonth() + 1, now.getFullYear());
   };
 
   const isCurrentMonth = () => {

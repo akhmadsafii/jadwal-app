@@ -10,8 +10,8 @@ export default function AdminBottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 flex justify-around items-center px-4 pb-6 bg-surface border-t border-outline-variant h-20 z-50 shadow-sm">
       {adminNavItems.map((item, idx) => {
-        const href = item.label === "Admin" ? "/admin" : item.label === "Requests" ? "/admin/approval" : "/admin";
-        const isActive = pathname === href || (item.label === "Roster" && pathname === "/admin");
+        const href = item.label === "Admin" ? "/admin" : item.label === "Requests" ? "/admin/approval" : "/admin/roster";
+        const isActive = pathname === href || (item.label === "Roster" && pathname === "/admin/roster");
 
         return (
           <Link
