@@ -7,9 +7,12 @@ export default function PublicTopBar() {
     <header className="bg-surface w-full top-0 sticky z-40 border-b border-outline-variant flex justify-between items-center h-16 px-container-margin">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 bg-primary-container rounded-full flex items-center justify-center">
-          <span className="material-symbols-outlined text-primary text-xl">schedule</span>
+          <span className="material-symbols-outlined text-primary text-xl">local_hospital</span>
         </div>
-        <h1 className="text-lg font-bold text-primary">Chronos Pro</h1>
+        <div>
+          <h1 className="text-base font-bold text-primary leading-tight">RS Budi Rahayu</h1>
+          <p className="text-[10px] text-on-surface-variant">Magelang, Jawa Tengah</p>
+        </div>
       </div>
       <Link
         href="/login"

@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
     // Generate JWT token
     const token = generateToken({
-      id: user.id,
+      userId: user.id,
       nip: user.nip,
       name: user.name,
       role: user.role as "ADMIN" | "EMPLOYEE",

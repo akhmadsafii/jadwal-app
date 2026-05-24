@@ -145,10 +145,10 @@ export default function LoginPage() {
       {/* Logo */}
       <div className="mb-8 text-center">
         <div className="w-20 h-20 bg-primary-container rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="material-symbols-outlined text-primary text-4xl">schedule</span>
+          <span className="material-symbols-outlined text-primary text-4xl">local_hospital</span>
         </div>
-        <h1 className="text-2xl font-bold text-primary">ShiftMaster Pro</h1>
-        <p className="text-sm text-outline mt-1">Sistem Manajemen Jadwal Shift</p>
+        <h1 className="text-2xl font-bold text-primary">RS Budi Rahayu</h1>
+        <p className="text-sm text-outline mt-1">Kota Magelang, Jawa Tengah</p>
       </div>
 
       {/* Login Card */}
@@ -263,7 +263,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <p className="text-xs text-outline mt-6 text-center">
-        © 2026 ShiftMaster Pro<br />
+        © 2026 RS Budi Rahayu<br />
         Seluruh hak cipta dilindungi
       </p>
     </div>

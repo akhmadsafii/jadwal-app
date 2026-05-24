@@ -1,10 +1,10 @@
 "use client";
 
-import { staffData, dayNames, generateScheduleForMonth, getDaysInMonth } from "@/data/publicData";
+import { Staff, dayNames, generateScheduleForMonth, getDaysInMonth } from "@/data/publicData";
 
-interface ScheduleGridProps {
-  daysInMonth?: number;
-  selectedMonth?: { month: number; year: number };
+interface AdminScheduleGridProps {
+  staff: Staff[];
+  selectedMonth: { month: number; year: number };
 }
 
 function getCellClass(code: string): string {
@@ -29,35 +29,16 @@ function getCellClass(code: string): string {
   }
 }
 
-function isSunday(index: number): boolean {
-  // Check if the day index falls on Sunday
-  // dayIndex 0 is day 1 of month, we need to find what day of week it is
-  return (index % 7) === 6; // Sunday is index 6 in 0-based (0=Mon, 6=Sun)
-}
-
-function getDayName(dayIndex: number): string {
-  // dayIndex is 0-based, we calculate the actual day of week
-  // based on the first day of the selected month
-  return dayNames[dayIndex % 7];
-}
-
 function isSundayHeader(dayIndex: number): boolean {
   return dayNames[dayIndex % 7] === "Mg";
 }
 
-export default function ScheduleGrid({ daysInMonth = 31, selectedMonth }: ScheduleGridProps) {
-  // Get actual month and year
-  const month = selectedMonth?.month || new Date().getMonth() + 1;
-  const year = selectedMonth?.year || new Date().getFullYear();
-
-  // Get actual days in month if selectedMonth is provided
-  const actualDaysInMonth = selectedMonth
-    ? getDaysInMonth(year, month)
-    : daysInMonth;
-
-  // Get first day of month to align correctly
+export default function AdminScheduleGrid({ staff, selectedMonth }: AdminScheduleGridProps) {
+  const month = selectedMonth.month;
+  const year = selectedMonth.year;
+  const actualDaysInMonth = getDaysInMonth(year, month);
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
-  const dayNamesStartIndex = firstDayOfMonth % 7; // 0=Sun in JS, convert to our index
+  const dayNamesStartIndex = firstDayOfMonth % 7;
 
   return (
     <div className="relative overflow-hidden bg-surface">
@@ -108,22 +89,21 @@ export default function ScheduleGrid({ daysInMonth = 31, selectedMonth }: Schedu
 
           {/* Body */}
           <tbody className="divide-y divide-outline-variant">
-            {staffData.map((staff) => {
-              // Generate schedule for this staff and month
-              const schedule = generateScheduleForMonth(staff.id, year, month);
+            {staff.map((s) => {
+              const schedule = generateScheduleForMonth(s.id, year, month);
 
               return (
                 <tr
-                  key={staff.id}
+                  key={s.id}
                   className="hover:bg-surface-container-low transition-colors"
                 >
                   {/* Staff Info */}
                   <td className="sticky left-0 z-20 bg-surface min-w-[140px] px-3 py-2 border-r border-outline-variant shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
                     <div className="text-[11px] leading-tight text-on-surface font-bold">
-                      {staff.name}
+                      {s.name}
                     </div>
                     <div className="text-[9px] text-outline mt-0.5">
-                      NIP. {staff.nip}
+                      NIP. {s.nip}
                     </div>
                   </td>
 

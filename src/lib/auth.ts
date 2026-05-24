@@ -6,7 +6,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "shiftmaster-pro-secret-key-2026";
 const JWT_EXPIRY = "7d";
 
 export interface TokenPayload {
-  id: string;
+  userId: string;
   nip: string;
   name: string;
   role: Role;

@@ -82,9 +82,16 @@ async function main() {
     { nip: "SM-88221", schedule: ["L", "P", "P", "S", "L", "S", "OFF", "OFF", "L", "L", "S", "P", "OFF", "P", "L", "OFF", "L", "L", "S", "OFF", "OFF", "P", "OFF", "L", "S", "P", "S", "L", "P", "P", "S"] },
   ];
 
-  const shiftMap: Record<string, "PAGI" | "SIANG" | "MALAM" | "OFF" | "LIBUR"> = {
-    P: "PAGI", S: "SIANG", M: "MALAM", L: "LIBUR", OFF: "OFF"
-  };
+  // Shift types mapping
+const shiftMap: Record<string, "LIBUR" | "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "CUTI" | "TURUN"> = {
+  P: "PAGI",      // 07:00 - 14:00
+  MID: "MIDDLE",  // 10:00 - 17:00
+  S: "SIANG",     // 14:00 - 21:00
+  M: "MALAM",     // 21:00 - 07:00
+  L: "LIBUR",
+  C: "CUTI",
+  X: "TURUN",
+};
 
   let assignmentsCreated = 0;
   for (const sched of schedules) {

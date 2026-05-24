@@ -1,4 +1,13 @@
-export type EmployeeShiftType = "shift_pagi" | "shift_malam" | "cuti_tahunan" | "tukar_shift";
+// Request types matching database ShiftType
+export type EmployeeShiftType =
+  | "SHIFT_PAGI"      // Pagi: 07:00 - 14:00
+  | "SHIFT_MIDDLE"    // Middle: 10:00 - 17:00
+  | "SHIFT_SIANG"     // Siang: 14:00 - 21:00
+  | "SHIFT_MALAM"     // Malam: 21:00 - 07:00
+  | "CUTI_TAHUNAN"    // Cuti Tahunan
+  | "CUTI_SAKIT"      // Cuti Sakit
+  | "TUKAR_SHIFT";    // Tukar Shift
+
 export type EmployeeRequestStatus = "pending" | "approved" | "expired" | "rejected";
 
 export interface EmployeeLeaveBalance {
@@ -24,6 +33,28 @@ export interface EmployeeProfile {
   position: string;
 }
 
+// Shift time ranges
+export const shiftTimeRanges: Record<EmployeeShiftType, string> = {
+  SHIFT_PAGI: "07:00 — 14:00",
+  SHIFT_MIDDLE: "10:00 — 17:00",
+  SHIFT_SIANG: "14:00 — 21:00",
+  SHIFT_MALAM: "21:00 — 07:00",
+  CUTI_TAHUNAN: "Libur",
+  CUTI_SAKIT: "Libur",
+  TUKAR_SHIFT: "-",
+};
+
+// Short shift codes
+export const shiftCodes: Record<EmployeeShiftType, string> = {
+  SHIFT_PAGI: "P",
+  SHIFT_MIDDLE: "MID",
+  SHIFT_SIANG: "S",
+  SHIFT_MALAM: "M",
+  CUTI_TAHUNAN: "L",
+  CUTI_SAKIT: "L",
+  TUKAR_SHIFT: "-",
+};
+
 // Employee Data
 export const employeeProfile: EmployeeProfile = {
   id: "1",
@@ -44,7 +75,7 @@ export const employeeLeaveBalances: EmployeeLeaveBalance[] = [
 export const employeeRequests: EmployeeRequest[] = [
   {
     id: "1",
-    type: "shift_pagi",
+    type: "SHIFT_PAGI",
     startDate: "20 Mei",
     endDate: "21 Mei",
     status: "pending",
@@ -52,7 +83,7 @@ export const employeeRequests: EmployeeRequest[] = [
   },
   {
     id: "2",
-    type: "cuti_tahunan",
+    type: "CUTI_TAHUNAN",
     startDate: "15 Mei",
     endDate: "16 Mei",
     status: "approved",
@@ -60,7 +91,7 @@ export const employeeRequests: EmployeeRequest[] = [
   },
   {
     id: "3",
-    type: "tukar_shift",
+    type: "TUKAR_SHIFT",
     startDate: "10 Mei",
     endDate: "",
     status: "expired",
@@ -70,10 +101,13 @@ export const employeeRequests: EmployeeRequest[] = [
 
 // Request Type Labels
 export const employeeRequestTypeLabels: Record<EmployeeShiftType, string> = {
-  shift_pagi: "Shift Pagi",
-  shift_malam: "Shift Malam",
-  cuti_tahunan: "Cuti Tahunan",
-  tukar_shift: "Tukar Shift",
+  SHIFT_PAGI: "Shift Pagi (07-14)",
+  SHIFT_MIDDLE: "Shift Middle (10-17)",
+  SHIFT_SIANG: "Shift Siang (14-21)",
+  SHIFT_MALAM: "Shift Malam (21-07)",
+  CUTI_TAHUNAN: "Cuti Tahunan",
+  CUTI_SAKIT: "Cuti Sakit",
+  TUKAR_SHIFT: "Tukar Shift",
 };
 
 // Request Status Labels
@@ -94,24 +128,29 @@ export const employeeRequestStatusColors: Record<EmployeeRequestStatus, string> 
 
 // Request Icons
 export const employeeRequestIcons: Record<EmployeeShiftType, string> = {
-  shift_pagi: "calendar_add_on",
-  shift_malam: "nightlight",
-  cuti_tahunan: "beach_access",
-  tukar_shift: "swap_horiz",
+  SHIFT_PAGI: "wb_sunny",
+  SHIFT_MIDDLE: "schedule",
+  SHIFT_SIANG: "light_mode",
+  SHIFT_MALAM: "nightlight",
+  CUTI_TAHUNAN: "beach_access",
+  CUTI_SAKIT: "medical_services",
+  TUKAR_SHIFT: "swap_horiz",
 };
 
-// Request Type Options
+// Request Type Options for form dropdown
 export const employeeRequestTypeOptions = [
-  { value: "shift_pagi", label: "Shift Pagi (Morning)" },
-  { value: "shift_malam", label: "Shift Malam (Night)" },
-  { value: "cuti_tahunan", label: "Cuti Tahunan (Annual Leave)" },
-  { value: "tukar_shift", label: "Tukar Shift (Shift Swap)" },
+  { value: "SHIFT_PAGI", label: "Shift Pagi (07-14)" },
+  { value: "SHIFT_MIDDLE", label: "Shift Middle (10-17)" },
+  { value: "SHIFT_SIANG", label: "Shift Siang (14-21)" },
+  { value: "SHIFT_MALAM", label: "Shift Malam (21-07)" },
+  { value: "CUTI_TAHUNAN", label: "Cuti Tahunan" },
+  { value: "CUTI_SAKIT", label: "Cuti Sakit" },
+  { value: "TUKAR_SHIFT", label: "Tukar Shift" },
 ];
 
-// Navigation
+// Navigation items for logged-in employee (without Profile - accessed via avatar menu)
 export const employeeNavItems = [
-  { icon: "home", label: "Home", href: "/" },
-  { icon: "event_note", label: "Requests", href: "/pegawai", isActive: true },
-  { icon: "calendar_view_month", label: "Roster", href: "/" },
-  { icon: "person", label: "Profile", href: "/login" },
+  { icon: "calendar_month", label: "Roster", href: "/pegawai/roster" },
+  { icon: "groups", label: "Staff", href: "/pegawai/staff" },
+  { icon: "pending_actions", label: "Requests", href: "/pegawai/requests" },
 ];

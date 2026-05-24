@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import PublicTopBar from "@/components/public/PublicTopBar";
+import { useState } from "react";
+import AdminTopBar from "@/components/admin/AdminTopBar";
+import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import MonthSelector from "@/components/public/MonthSelector";
-import ScheduleGrid from "@/components/public/ScheduleGrid";
+import AdminScheduleGrid from "@/components/admin/AdminScheduleGrid";
 import ShiftLegend from "@/components/public/ShiftLegend";
-import { getDaysInMonth, getMonthlyStats, getStaffAvailability } from "@/data/publicData";
+import ExportButton from "@/components/admin/ExportButton";
+import { getDaysInMonth, getMonthlyStats, getStaffAvailability, generateScheduleForMonth, staffData } from "@/data/publicData";
 
-export default function Home() {
+export default function AdminRosterPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return { month: now.getMonth() + 1, year: now.getFullYear() };
@@ -17,17 +19,45 @@ export default function Home() {
   const monthlyStats = getMonthlyStats(selectedMonth.year, selectedMonth.month);
   const staffAvailability = getStaffAvailability(selectedMonth.year, selectedMonth.month);
 
-  const handleMonthChange = useCallback((month: number, year: number) => {
+  const handleMonthChange = (month: number, year: number) => {
     setSelectedMonth({ month, year });
-  }, []);
+  };
+
+  // Prepare data for export
+  const exportData = staffData.map((staff) => {
+    const schedule = generateScheduleForMonth(staff.id, selectedMonth.year, selectedMonth.month);
+    return {
+      name: staff.name,
+      nip: staff.nip,
+      schedule: schedule.join(", "),
+    };
+  });
 
   return (
-    <div className="min-h-screen">
-      <PublicTopBar />
+    <div className="min-h-screen flex flex-col pb-24">
+      <AdminTopBar />
 
-      <main className="pt-14">
-        <MonthSelector onMonthChange={handleMonthChange} />
-        <ScheduleGrid daysInMonth={daysInMonth} selectedMonth={selectedMonth} />
+      <main className="flex-1 w-full flex flex-col gap-4 py-4 overflow-x-hidden">
+        {/* Header with Export Button */}
+        <div className="px-container-margin flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-on-surface">Jadwal Semua Pegawai</h1>
+          <ExportButton
+            data={exportData}
+            month={selectedMonth.month}
+            year={selectedMonth.year}
+          />
+        </div>
+
+        {/* Month Selector */}
+        <div className="px-container-margin">
+          <MonthSelector onMonthChange={handleMonthChange} />
+        </div>
+
+        {/* Schedule Grid */}
+        <AdminScheduleGrid
+          staff={staffData}
+          selectedMonth={selectedMonth}
+        />
 
         {/* Daily Statistics */}
         <section className="px-container-margin py-4">
@@ -91,6 +121,8 @@ export default function Home() {
 
         <ShiftLegend />
       </main>
+
+      <AdminBottomNav />
     </div>
   );
 }

@@ -1,8 +1,27 @@
 "use client";
 
-import { shiftDistribution, monthlyStats, staffAvailability } from "@/data/publicData";
+import { shiftDistribution, getMonthlyStats, getStaffAvailability } from "@/data/publicData";
 
-export default function StatsSection() {
+interface StatsSectionProps {
+  selectedMonth?: { month: number; year: number };
+}
+
+const monthNames = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+];
+
+export default function StatsSection({ selectedMonth }: StatsSectionProps) {
+  // Get month/year from selectedMonth or use current date
+  const month = selectedMonth?.month || new Date().getMonth() + 1;
+  const year = selectedMonth?.year || new Date().getFullYear();
+
+  const monthName = `${monthNames[month - 1]} ${year}`;
+
+  // Get dynamic stats based on selected month
+  const stats = getMonthlyStats(year, month);
+  const availability = getStaffAvailability(year, month);
+
   // Calculate staff counts from percentage
   const totalStaff = 20;
 
@@ -15,7 +34,7 @@ export default function StatsSection() {
       {/* Monthly Shift Breakdown */}
       <div className="mb-6 bg-surface-container-low p-4 rounded-xl border border-outline-variant">
         <h3 className="text-xs text-outline uppercase mb-4">
-          Distribusi Shift Bulan Ini (Mei 2026)
+          Distribusi Shift Bulan {monthName}
         </h3>
         <div className="space-y-4">
           {shiftDistribution.map((shift, idx) => {
@@ -52,9 +71,9 @@ export default function StatsSection() {
 
       {/* Monthly Summary */}
       <div className="mb-6">
-        <h3 className="text-xs text-outline uppercase mb-3">Ringkasan Bulan Ini</h3>
+        <h3 className="text-xs text-outline uppercase mb-3">Ringkasan Bulan {monthName}</h3>
         <div className="grid grid-cols-2 gap-3">
-          {monthlyStats.map((stat, idx) => (
+          {stats.map((stat, idx) => (
             <div
               key={idx}
               className="bg-surface-container-lowest p-3 rounded-lg border border-outline-variant"
@@ -83,13 +102,13 @@ export default function StatsSection() {
                 className="stroke-primary"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                strokeDasharray={`${staffAvailability.percentage}, 100`}
+                strokeDasharray={`${availability.percentage}, 100`}
                 strokeWidth="4"
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-xs font-bold">
-                {staffAvailability.percentage}%
+                {availability.percentage}%
               </span>
             </div>
           </div>
@@ -99,13 +118,13 @@ export default function StatsSection() {
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-primary" />
               <span className="text-[10px] text-on-surface-variant">
-                On-Duty ({staffAvailability.onDuty} org)
+                On-Duty ({availability.onDuty} org)
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-surface-container-highest" />
               <span className="text-[10px] text-on-surface-variant">
-                Off-Duty ({staffAvailability.offDuty} org)
+                Off-Duty ({availability.offDuty} org)
               </span>
             </div>
           </div>

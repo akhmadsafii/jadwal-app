@@ -1,0 +1,91 @@
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { verifyToken } from "@/lib/auth";
+
+export async function GET(request: Request) {
+  try {
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        nip: true,
+        name: true,
+        email: true,
+        role: true,
+        position: true,
+        avatarUrl: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, user });
+  } catch (error) {
+    console.error("Get profile error:", error);
+    return NextResponse.json(
+      { error: "Terjadi kesalahan saat mengambil data profil" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    const { name, email, phone, position, avatarUrl } = await request.json();
+
+    const updatedUser = await prisma.user.update({
+      where: { id: decoded.userId },
+      data: {
+        name: name || undefined,
+        email: email || undefined,
+        position: position || undefined,
+        avatarUrl: avatarUrl || undefined,
+      },
+      select: {
+        id: true,
+        nip: true,
+        name: true,
+        email: true,
+        role: true,
+        position: true,
+        avatarUrl: true,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Profil berhasil diperbarui",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    return NextResponse.json(
+      { error: "Terjadi kesalahan saat memperbarui profil" },
+      { status: 500 }
+    );
+  }
+}

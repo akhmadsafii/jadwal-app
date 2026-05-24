@@ -1,31 +1,40 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
+
+interface UpdateScheduleRequest {
+  userId: string;
+  date: string;
+  shiftType: ShiftType;
+}
+
 export async function POST(request: Request) {
   try {
-    const { userId, shiftType, date } = await request.json();
+    const data: UpdateScheduleRequest = await request.json();
 
-    if (!userId || !shiftType || !date) {
+    if (!data.userId || !data.date || !data.shiftType) {
       return NextResponse.json(
         { error: "Data tidak lengkap" },
         { status: 400 }
       );
     }
 
-    const shiftDate = new Date(date);
+    const shiftDate = new Date(data.date);
+    shiftDate.setHours(0, 0, 0, 0);
 
     const assignment = await prisma.shiftAssignment.upsert({
       where: {
         userId_date: {
-          userId,
+          userId: data.userId,
           date: shiftDate,
         },
       },
-      update: { shiftType },
+      update: { shiftType: data.shiftType },
       create: {
-        userId,
+        userId: data.userId,
         date: shiftDate,
-        shiftType,
+        shiftType: data.shiftType,
       },
     });
 

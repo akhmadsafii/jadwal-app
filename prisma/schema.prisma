@@ -82,11 +82,13 @@ model ShiftAssignment {
 }
 
 enum ShiftType {
-  PAGI
-  SIANG
-  MALAM
-  OFF
-  LIBUR
+  PAGI      // Pagi: 07:00 - 14:00
+  MIDDLE    // Middle: 10:00 - 17:00
+  SIANG     // Siang: 14:00 - 21:00
+  MALAM     // Malam: 21:00 - 07:00
+  LIBUR     // Libur
+  CUTI      // Cuti
+  TURUN     // Turun Jaga
 }
 
 model MonthlyStats {

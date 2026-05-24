@@ -6,10 +6,33 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month");
     const year = searchParams.get("year");
+    const userId = searchParams.get("userId");
 
     const now = new Date();
     const targetMonth = month ? parseInt(month) : now.getMonth() + 1;
     const targetYear = year ? parseInt(year) : now.getFullYear();
+
+    // If userId is provided, return single user schedule
+    if (userId) {
+      const userSchedule = await prisma.shiftAssignment.findMany({
+        where: {
+          userId,
+          date: {
+            gte: new Date(targetYear, targetMonth - 1, 1),
+            lt: new Date(targetYear, targetMonth, 1),
+          },
+        },
+        orderBy: { date: "asc" },
+      });
+
+      return NextResponse.json({
+        success: true,
+        schedule: userSchedule.map((s) => ({
+          date: s.date,
+          shiftType: s.shiftType,
+        })),
+      });
+    }
 
     // Get all employees with their shift assignments
     const employees = await prisma.user.findMany({
