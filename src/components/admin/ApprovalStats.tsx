@@ -1,12 +1,12 @@
 "use client";
 
-import { approvalData } from "@/data/approvalData";
+import { ApprovalItem } from "@/data/approvalData";
 
-export default function ApprovalStats() {
-  const total = approvalData.length;
-  const pending = approvalData.filter((i) => i.status === "PENDING").length;
-  const approved = approvalData.filter((i) => i.status === "APPROVED").length;
-  const rejected = approvalData.filter((i) => i.status === "REJECTED").length;
+export default function ApprovalStats({ items }: { items: ApprovalItem[] }) {
+  const total = items.length;
+  const pending = items.filter((i) => i.status === "PENDING").length;
+  const approved = items.filter((i) => i.status === "APPROVED").length;
+  const rejected = items.filter((i) => i.status === "REJECTED").length;
 
   return (
     <section className="px-container-margin">

@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+function toDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -29,6 +36,7 @@ export async function GET(request: Request) {
         success: true,
         schedule: userSchedule.map((s) => ({
           date: s.date,
+          dateKey: toDateKey(s.date),
           shiftType: s.shiftType,
         })),
       });
@@ -56,24 +64,25 @@ export async function GET(request: Request) {
       where: { month: targetMonth, year: targetYear },
     });
 
-    // Calculate shift distribution
-    const shiftCounts = { pagi: 0, siang: 0, malam: 0 };
+    // Calculate shift distribution from saved assignments.
+    const shiftCounts = {
+      PAGI: 0,
+      MIDDLE: 0,
+      SIANG: 0,
+      MALAM: 0,
+      LIBUR: 0,
+      CUTI: 0,
+      TURUN: 0,
+    };
     employees.forEach((emp) => {
       emp.shiftAssignments.forEach((shift) => {
-        if (shift.shiftType === "PAGI") shiftCounts.pagi++;
-        else if (shift.shiftType === "SIANG") shiftCounts.siang++;
-        else if (shift.shiftType === "MALAM") shiftCounts.malam++;
+        shiftCounts[shift.shiftType] += 1;
       });
     });
 
-    const totalAssignments = shiftCounts.pagi + shiftCounts.siang + shiftCounts.malam;
-    const distribution = totalAssignments > 0
-      ? {
-          pagi: Math.round((shiftCounts.pagi / totalAssignments) * 100),
-          siang: Math.round((shiftCounts.siang / totalAssignments) * 100),
-          malam: Math.round((shiftCounts.malam / totalAssignments) * 100),
-        }
-      : { pagi: 45, siang: 30, malam: 25 };
+    const totalAssignments = Object.values(shiftCounts).reduce((sum, count) => sum + count, 0);
+    const percentage = (count: number) =>
+      totalAssignments > 0 ? Math.round((count / totalAssignments) * 100) : 0;
 
     return NextResponse.json({
       success: true,
@@ -85,6 +94,7 @@ export async function GET(request: Request) {
         avatarUrl: emp.avatarUrl,
         schedule: emp.shiftAssignments.map((s) => ({
           date: s.date,
+          dateKey: toDateKey(s.date),
           shiftType: s.shiftType,
         })),
         leaveBalance: emp.leaveBalance,
@@ -93,13 +103,16 @@ export async function GET(request: Request) {
         month: targetMonth,
         year: targetYear,
         totalWorkDays: 22,
-        attendanceRate: 98.5,
-        overtimeHours: 14,
+        attendanceRate: 0,
+        overtimeHours: 0,
       },
+      shiftCounts,
+      totalAssignments,
       shiftDistribution: [
-        { name: "Pagi (P)", code: "P", percentage: distribution.pagi, color: "bg-primary" },
-        { name: "Siang (S)", code: "S", percentage: distribution.siang, color: "bg-tertiary" },
-        { name: "Malam (M)", code: "M", percentage: distribution.malam, color: "bg-secondary" },
+        { name: "Pagi (P)", code: "P", percentage: percentage(shiftCounts.PAGI), color: "bg-primary", count: shiftCounts.PAGI },
+        { name: "Middle (MID)", code: "MID", percentage: percentage(shiftCounts.MIDDLE), color: "bg-tertiary", count: shiftCounts.MIDDLE },
+        { name: "Siang (S)", code: "S", percentage: percentage(shiftCounts.SIANG), color: "bg-tertiary", count: shiftCounts.SIANG },
+        { name: "Malam (M)", code: "M", percentage: percentage(shiftCounts.MALAM), color: "bg-secondary", count: shiftCounts.MALAM },
       ],
     });
   } catch (error) {

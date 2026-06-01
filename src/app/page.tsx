@@ -1,25 +1,64 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import PublicTopBar from "@/components/public/PublicTopBar";
 import MonthSelector from "@/components/public/MonthSelector";
 import ScheduleGrid from "@/components/public/ScheduleGrid";
 import ShiftLegend from "@/components/public/ShiftLegend";
-import { getDaysInMonth, getMonthlyStats, getStaffAvailability } from "@/data/publicData";
+import { getDaysInMonth } from "@/data/publicData";
+
+interface ScheduleResponse {
+  employees: {
+    id: string;
+    name: string;
+    nip: string;
+    schedule: { date: string; shiftType: string }[];
+  }[];
+  monthlyStats: {
+    totalWorkDays: number;
+    attendanceRate: number;
+    overtimeHours: number;
+  };
+  shiftCounts: Record<string, number>;
+}
 
 export default function Home() {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return { month: now.getMonth() + 1, year: now.getFullYear() };
   });
+  const [scheduleData, setScheduleData] = useState<ScheduleResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const daysInMonth = getDaysInMonth(selectedMonth.year, selectedMonth.month);
-  const monthlyStats = getMonthlyStats(selectedMonth.year, selectedMonth.month);
-  const staffAvailability = getStaffAvailability(selectedMonth.year, selectedMonth.month);
+  const monthlyStats = scheduleData?.monthlyStats;
+  const shiftCounts = scheduleData?.shiftCounts || {};
+  const totalStaff = scheduleData?.employees.length || 0;
+  const activeStaff = scheduleData?.employees.filter((employee) =>
+    employee.schedule.some((assignment) => assignment.shiftType !== "LIBUR")
+  ).length || 0;
 
   const handleMonthChange = useCallback((month: number, year: number) => {
     setSelectedMonth({ month, year });
   }, []);
+
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(
+          `/api/schedules?month=${selectedMonth.month}&year=${selectedMonth.year}`
+        );
+        if (response.ok) {
+          setScheduleData(await response.json());
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSchedule();
+  }, [selectedMonth.month, selectedMonth.year]);
 
   return (
     <div className="min-h-screen">
@@ -27,7 +66,12 @@ export default function Home() {
 
       <main className="pt-14">
         <MonthSelector onMonthChange={handleMonthChange} />
-        <ScheduleGrid daysInMonth={daysInMonth} selectedMonth={selectedMonth} />
+        <ScheduleGrid
+          daysInMonth={daysInMonth}
+          selectedMonth={selectedMonth}
+          employees={scheduleData?.employees || []}
+          isLoading={isLoading}
+        />
 
         {/* Daily Statistics */}
         <section className="px-container-margin py-4">
@@ -37,28 +81,28 @@ export default function Home() {
               <div className="w-8 h-8 mx-auto bg-primary/10 rounded-lg flex items-center justify-center mb-2">
                 <span className="material-symbols-outlined text-primary text-[18px]">wb_sunny</span>
               </div>
-              <p className="text-lg font-bold text-primary">{staffAvailability.onDuty}</p>
+              <p className="text-lg font-bold text-primary">{shiftCounts.PAGI || 0}</p>
               <p className="text-[10px] text-on-surface-variant">Pagi</p>
             </div>
             <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-center">
               <div className="w-8 h-8 mx-auto bg-tertiary/10 rounded-lg flex items-center justify-center mb-2">
                 <span className="material-symbols-outlined text-tertiary text-[18px]">schedule</span>
               </div>
-              <p className="text-lg font-bold text-tertiary">{Math.floor(staffAvailability.onDuty * 0.5)}</p>
+              <p className="text-lg font-bold text-tertiary">{shiftCounts.MIDDLE || 0}</p>
               <p className="text-[10px] text-on-surface-variant">Middle</p>
             </div>
             <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-center">
               <div className="w-8 h-8 mx-auto bg-tertiary/10 rounded-lg flex items-center justify-center mb-2">
                 <span className="material-symbols-outlined text-tertiary text-[18px]">light_mode</span>
               </div>
-              <p className="text-lg font-bold text-tertiary">{Math.floor(staffAvailability.onDuty * 0.6)}</p>
+              <p className="text-lg font-bold text-tertiary">{shiftCounts.SIANG || 0}</p>
               <p className="text-[10px] text-on-surface-variant">Siang</p>
             </div>
             <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-center">
               <div className="w-8 h-8 mx-auto bg-secondary/10 rounded-lg flex items-center justify-center mb-2">
                 <span className="material-symbols-outlined text-secondary text-[18px]">nightlight</span>
               </div>
-              <p className="text-lg font-bold text-secondary">{Math.floor(staffAvailability.onDuty * 0.4)}</p>
+              <p className="text-lg font-bold text-secondary">{shiftCounts.MALAM || 0}</p>
               <p className="text-[10px] text-on-surface-variant">Malam</p>
             </div>
           </div>
@@ -71,19 +115,19 @@ export default function Home() {
             <div className="grid grid-cols-2">
               <div className="p-4 border-r border-b border-outline-variant">
                 <p className="text-[10px] text-on-surface-variant uppercase">Total Jam Kerja</p>
-                <p className="text-xl font-bold text-on-surface">{monthlyStats[0].value}</p>
+                <p className="text-xl font-bold text-on-surface">{monthlyStats?.totalWorkDays || 0} Hari</p>
               </div>
               <div className="p-4 border-b border-outline-variant">
                 <p className="text-[10px] text-on-surface-variant uppercase">Kehadiran</p>
-                <p className="text-xl font-bold text-on-surface">{monthlyStats[1].value}</p>
+                <p className="text-xl font-bold text-on-surface">{monthlyStats?.attendanceRate || 0}%</p>
               </div>
               <div className="p-4 border-r border-outline-variant">
                 <p className="text-[10px] text-on-surface-variant uppercase">Staff Standby</p>
-                <p className="text-xl font-bold text-on-surface">{monthlyStats[3].value}</p>
+                <p className="text-xl font-bold text-on-surface">{activeStaff} Org</p>
               </div>
               <div className="p-4">
                 <p className="text-[10px] text-on-surface-variant uppercase">Total Staff</p>
-                <p className="text-xl font-bold text-on-surface">{staffAvailability.onDuty + staffAvailability.offDuty} Org</p>
+                <p className="text-xl font-bold text-on-surface">{totalStaff} Org</p>
               </div>
             </div>
           </div>

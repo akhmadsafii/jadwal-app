@@ -1,29 +1,38 @@
+import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 
-// Create connection pool
-const pool = new Pool({
-  host: "localhost",
-  port: 5432,
-  user: "mac",
-  password: "1234",
-  database: "jadwal_db",
-});
+// Create connection pool from DATABASE_URL so local and hosting use the same config.
+const connectionString =
+  process.env.DATABASE_URL ||
+  "postgresql://mac:1234@localhost:5432/jadwal_db";
+const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter } as any);
 
 async function main() {
   console.log("🌱 Seeding database...\n");
 
-  // Clear existing data
-  console.log("Clearing existing data...");
-  await prisma.shiftAssignment.deleteMany();
-  await prisma.shiftRequest.deleteMany();
-  await prisma.leaveBalance.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.monthlyStats.deleteMany();
+  const shouldReset = process.env.FORCE_SEED_RESET === "true";
+  const existingUsers = await prisma.user.count();
+
+  if (existingUsers > 0 && !shouldReset) {
+    console.log(
+      `Database already has ${existingUsers} user(s). Skipping seed. Set FORCE_SEED_RESET=true to reset and reseed.`
+    );
+    return;
+  }
+
+  if (shouldReset) {
+    console.log("FORCE_SEED_RESET=true detected. Clearing existing data...");
+    await prisma.shiftAssignment.deleteMany();
+    await prisma.shiftRequest.deleteMany();
+    await prisma.leaveBalance.deleteMany();
+    await prisma.user.deleteMany();
+    await prisma.monthlyStats.deleteMany();
+  }
 
   // Create Admin
   const hashedAdminPassword = await bcrypt.hash("12345678", 10);
@@ -89,6 +98,7 @@ const shiftMap: Record<string, "LIBUR" | "PAGI" | "MIDDLE" | "SIANG" | "MALAM" |
   S: "SIANG",     // 14:00 - 21:00
   M: "MALAM",     // 21:00 - 07:00
   L: "LIBUR",
+  OFF: "LIBUR",
   C: "CUTI",
   X: "TURUN",
 };

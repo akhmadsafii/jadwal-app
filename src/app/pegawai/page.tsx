@@ -1,379 +1,451 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import EmployeeTopBar from "@/components/pegawai/EmployeeTopBar";
 import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import { useAuth } from "@/lib/authContext";
 
-interface TodaySchedule {
-  shiftType: string;
-  time: string;
-  department: string;
-  hasClockedIn: boolean;
-  clockInTime?: string;
+type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
+type RequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+
+interface ShiftAssignment {
+  date: string;
+  dateKey?: string;
+  shiftType: ShiftType;
 }
 
-interface UpcomingShift {
-  date: Date;
-  time: string;
-  shiftCode: string;
-  label: string;
-}
-
-interface Activity {
+interface EmployeeSchedule {
   id: string;
-  type: "success" | "info" | "warning";
-  title: string;
-  description: string;
-  time: string;
+  name: string;
+  position?: string | null;
+  avatarUrl?: string | null;
+  schedule: ShiftAssignment[];
 }
 
-const shiftColorMap: Record<string, string> = {
-  P: "bg-primary",
-  MID: "bg-tertiary",
-  S: "bg-tertiary",
-  M: "bg-secondary",
-  L: "bg-outline",
+interface ShiftRequest {
+  id: string;
+  type: string;
+  startDate: string;
+  endDate?: string | null;
+  status: RequestStatus;
+}
+
+const shiftMeta: Record<ShiftType, {
+  code: string;
+  label: string;
+  time: string;
+  icon: string;
+  pill: string;
+  surface: string;
+}> = {
+  PAGI: {
+    code: "P",
+    label: "Pagi",
+    time: "07:00 - 14:00",
+    icon: "wb_sunny",
+    pill: "bg-primary text-on-primary",
+    surface: "bg-primary/10 text-primary border-primary/20",
+  },
+  MIDDLE: {
+    code: "MID",
+    label: "Middle",
+    time: "10:00 - 17:00",
+    icon: "schedule",
+    pill: "bg-tertiary text-on-tertiary",
+    surface: "bg-tertiary/10 text-tertiary border-tertiary/20",
+  },
+  SIANG: {
+    code: "S",
+    label: "Siang",
+    time: "14:00 - 21:00",
+    icon: "light_mode",
+    pill: "bg-tertiary text-on-tertiary",
+    surface: "bg-tertiary/10 text-tertiary border-tertiary/20",
+  },
+  MALAM: {
+    code: "M",
+    label: "Malam",
+    time: "21:00 - 07:00",
+    icon: "nightlight",
+    pill: "bg-secondary text-on-secondary",
+    surface: "bg-secondary/10 text-secondary border-secondary/20",
+  },
+  LIBUR: {
+    code: "L",
+    label: "Libur",
+    time: "Tidak bertugas",
+    icon: "weekend",
+    pill: "bg-surface-container-highest text-on-surface-variant",
+    surface: "bg-surface-container text-on-surface-variant border-outline-variant",
+  },
+  CUTI: {
+    code: "C",
+    label: "Cuti",
+    time: "Cuti",
+    icon: "beach_access",
+    pill: "bg-primary-container text-on-primary-container",
+    surface: "bg-primary/10 text-primary border-primary/20",
+  },
+  TURUN: {
+    code: "X",
+    label: "Turun Jaga",
+    time: "Turun jaga",
+    icon: "event_busy",
+    pill: "bg-error text-on-error",
+    surface: "bg-error-container text-on-error-container border-error/20",
+  },
 };
+
+const requestStatusMeta: Record<RequestStatus, { label: string; color: string; icon: string }> = {
+  PENDING: { label: "Menunggu", color: "bg-secondary-container text-on-secondary-container", icon: "pending_actions" },
+  APPROVED: { label: "Disetujui", color: "bg-green-100 text-green-800", icon: "check_circle" },
+  REJECTED: { label: "Ditolak", color: "bg-error-container text-on-error-container", icon: "cancel" },
+  EXPIRED: { label: "Lewat", color: "bg-outline-variant text-on-surface-variant", icon: "history" },
+};
+
+const requestTypeLabels: Record<string, string> = {
+  SHIFT_PAGI: "Shift Pagi",
+  SHIFT_MIDDLE: "Shift Middle",
+  SHIFT_SIANG: "Shift Siang",
+  SHIFT_MALAM: "Shift Malam",
+  CUTI_TAHUNAN: "Cuti Tahunan",
+  CUTI_SAKIT: "Cuti Sakit",
+  TUKAR_SHIFT: "Tukar Shift",
+};
+
+function getDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDate(date: Date) {
+  return date.toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatShortDate(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("id-ID", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function getDisplayName(name?: string) {
+  if (!name) return "Pegawai";
+  return name.split(",")[0].trim();
+}
+
+function isWorkShift(shiftType: ShiftType) {
+  return !["LIBUR", "CUTI", "TURUN"].includes(shiftType);
+}
+
+function getAssignmentKey(assignment: ShiftAssignment) {
+  return assignment.dateKey || assignment.date.split("T")[0];
+}
 
 export default function PegawaiPage() {
   const { user, token } = useAuth();
-  const [todaySchedule, setTodaySchedule] = useState<TodaySchedule | null>(null);
-  const [upcomingShifts, setUpcomingShifts] = useState<UpcomingShift[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [leaveBalance, setLeaveBalance] = useState({ cuti: 12, sakit: 5, kompensasi: 2 });
-  const stats = { attendance: 98, totalHours: 160 };
+  const [schedule, setSchedule] = useState<ShiftAssignment[]>([]);
+  const [allEmployees, setAllEmployees] = useState<EmployeeSchedule[]>([]);
+  const [requests, setRequests] = useState<ShiftRequest[]>([]);
+  const [leaveBalance, setLeaveBalance] = useState({ annualLeave: 12, sickLeave: 5, compensation: 2 });
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Get user name without suffix
-  const getDisplayName = (name: string): string => {
-    if (!name) return "Pegawai";
-    const parts = name.split(",");
-    return parts[0].trim();
-  };
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  const todayKey = getDateKey(now);
 
-  // Format date
-  const formatDate = () => {
-    const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-    const now = new Date();
-    return `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
-  };
+  const todayShift = useMemo(() => {
+    return schedule.find((assignment) => getAssignmentKey(assignment) === todayKey)?.shiftType || "LIBUR";
+  }, [schedule, todayKey]);
 
-  // Fetch user data
+  const nextShifts = useMemo(() => {
+    return schedule
+      .filter((assignment) => getAssignmentKey(assignment) >= todayKey)
+      .sort((a, b) => getAssignmentKey(a).localeCompare(getAssignmentKey(b)))
+      .slice(0, 5);
+  }, [schedule, todayKey]);
+
+  const monthSummary = useMemo(() => {
+    return schedule.reduce(
+      (acc, assignment) => {
+        if (isWorkShift(assignment.shiftType)) acc.work += 1;
+        if (assignment.shiftType === "MALAM") acc.night += 1;
+        if (assignment.shiftType === "LIBUR") acc.off += 1;
+        if (assignment.shiftType === "CUTI") acc.leave += 1;
+        return acc;
+      },
+      { work: 0, night: 0, off: 0, leave: 0 }
+    );
+  }, [schedule]);
+
+  const coworkersToday = useMemo(() => {
+    return allEmployees
+      .map((employee) => {
+        const shiftType = employee.schedule.find((assignment) => getAssignmentKey(assignment) === todayKey)?.shiftType || "LIBUR";
+        return { ...employee, shiftType };
+      })
+      .filter((employee) => employee.id !== user?.id && isWorkShift(employee.shiftType))
+      .slice(0, 4);
+  }, [allEmployees, todayKey, user?.id]);
+
+  const requestSummary = useMemo(() => {
+    return requests.reduce(
+      (acc, request) => {
+        acc[request.status] += 1;
+        return acc;
+      },
+      { PENDING: 0, APPROVED: 0, REJECTED: 0, EXPIRED: 0 } as Record<RequestStatus, number>
+    );
+  }, [requests]);
+
   useEffect(() => {
-    const fetchUserData = async () => {
+    const fetchDashboard = async () => {
       if (!user?.id || !token) return;
 
+      setIsLoading(true);
       try {
-        // Fetch leave balance
-        const balanceRes = await fetch(`/api/users/${user.id}/balance`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const [balanceRes, ownScheduleRes, allScheduleRes, requestsRes] = await Promise.all([
+          fetch(`/api/users/${user.id}/balance`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/schedules?userId=${user.id}&month=${month}&year=${year}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/schedules?month=${month}&year=${year}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/requests?userId=${user.id}`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+
         if (balanceRes.ok) {
-          const balanceData = await balanceRes.json();
-          if (balanceData.balance) {
-            setLeaveBalance({
-              cuti: balanceData.balance.annualLeave,
-              sakit: balanceData.balance.sickLeave,
-              kompensasi: balanceData.balance.compensation,
-            });
-          }
+          const data = await balanceRes.json();
+          if (data.balance) setLeaveBalance(data.balance);
         }
 
-        // Fetch today's schedule
-        const scheduleRes = await fetch(
-          `/api/schedules?userId=${user.id}&month=${new Date().getMonth() + 1}&year=${new Date().getFullYear()}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (scheduleRes.ok) {
-          const scheduleData = await scheduleRes.json();
-          const today = new Date().toISOString().split("T")[0];
-          const todayShift = scheduleData.schedule?.find(
-            (s: { date: string }) => s.date.split("T")[0] === today
-          );
-
-          if (todayShift) {
-            const shiftMap: Record<string, { time: string; code: string }> = {
-              PAGI: { time: "07:00 — 14:00", code: "P" },
-              MIDDLE: { time: "10:00 — 17:00", code: "MID" },
-              SIANG: { time: "14:00 — 21:00", code: "S" },
-              MALAM: { time: "21:00 — 07:00", code: "M" },
-              LIBUR: { time: "Libur", code: "L" },
-              CUTI: { time: "Cuti", code: "C" },
-              TURUN: { time: "Turun", code: "X" },
-            };
-            const shiftInfo = shiftMap[todayShift.shiftType] || { time: "-", code: "-" };
-
-            setTodaySchedule({
-              shiftType: todayShift.shiftType,
-              time: shiftInfo.time,
-              department: user.position || "Farmasi",
-              hasClockedIn: true,
-              clockInTime: "07:55",
-            });
-          }
+        if (ownScheduleRes.ok) {
+          const data = await ownScheduleRes.json();
+          setSchedule(data.schedule || []);
         }
 
-        // Fetch recent requests (for activities)
-        const requestsRes = await fetch(`/api/requests?userId=${user.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        if (allScheduleRes.ok) {
+          const data = await allScheduleRes.json();
+          setAllEmployees(data.employees || []);
+        }
+
         if (requestsRes.ok) {
-          const requestsData = await requestsRes.json();
-          const recentActivities: Activity[] = requestsData.requests?.slice(0, 5).map((req: any, idx: number) => {
-            let type: "success" | "info" | "warning" = "info";
-            let description = `Request ${req.type.replace("_", " ").toLowerCase()}`;
-
-            if (req.status === "APPROVED") {
-              type = "success";
-              description = `Pengajuan ${req.type.replace("_", " ").toLowerCase()} telah disetujui.`;
-            } else if (req.status === "PENDING") {
-              type = "info";
-              description = `Menunggu persetujuan untuk ${req.type.replace("_", " ").toLowerCase()}.`;
-            } else if (req.status === "REJECTED") {
-              type = "warning";
-              description = `Pengajuan ${req.type.replace("_", " ").toLowerCase()} ditolak.`;
-            }
-
-            const days = ["2j", "3j", "Kemarin", "2 hari", "3 hari"];
-            return {
-              id: req.id,
-              type,
-              title: `Request ${req.type.replace("_", " ")}`,
-              description,
-              time: days[idx] || `${idx + 1} hari`,
-            };
-          }) || [];
-
-          setActivities(recentActivities);
+          const data = await requestsRes.json();
+          setRequests(data.requests || []);
         }
       } catch (error) {
-        console.error("Failed to fetch user data:", error);
+        console.error("Failed to fetch employee dashboard:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchUserData();
-  }, [user?.id, token, user?.position]);
+    fetchDashboard();
+  }, [user?.id, token, month, year]);
 
-  // Generate upcoming shifts based on today's schedule
-  useEffect(() => {
-    const generateUpcoming = () => {
-      const shifts: UpcomingShift[] = [];
-      const today = new Date();
-
-      for (let i = 1; i <= 7; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + i);
-
-        // Simulate different shifts
-        const shiftTypes = [
-          { time: "08:00", code: "P", label: "P (Pagi)" },
-          { time: "14:00", code: "S", label: "S (Siang)" },
-          { time: "OFF", code: "L", label: "Libur Mingguan" },
-        ];
-
-        const shift = shiftTypes[i % 3];
-        shifts.push({
-          date,
-          time: shift.time,
-          shiftCode: shift.code,
-          label: shift.label,
-        });
-      }
-
-      setUpcomingShifts(shifts);
-    };
-
-    generateUpcoming();
-  }, []);
-
-  const formatUpcomingDate = (date: Date, index: number): string => {
-    if (index === 1) return "Besok";
-    const days = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-    return `${days[date.getDay()]}, ${date.getDate()} ${date.toLocaleDateString("id-ID", { month: "short" })}`;
-  };
-
-  const getActivityIcon = (type: Activity["type"]) => {
-    switch (type) {
-      case "success":
-        return { icon: "check_circle", bg: "bg-green-100", color: "text-green-700" };
-      case "warning":
-        return { icon: "warning", bg: "bg-amber-100", color: "text-amber-700" };
-      default:
-        return { icon: "info", bg: "bg-blue-100", color: "text-blue-700" };
-    }
-  };
+  const todayMeta = shiftMeta[todayShift];
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-[132px] bg-background">
       <EmployeeTopBar />
 
-      <main className="pt-14 px-container-margin max-w-2xl mx-auto space-y-6">
-        {/* Welcome Section */}
-        <section className="space-y-1">
-          <h1 className="font-headline-lg text-headline-lg text-on-surface">
-            Selamat Datang, {getDisplayName(user?.name || "")}!
+      <main className="px-container-margin max-w-2xl mx-auto">
+        <section className="py-4">
+          <p className="text-sm text-on-surface-variant">{formatDate(now)}</p>
+          <h1 className="text-2xl font-bold text-on-surface mt-1">
+            Halo, {getDisplayName(user?.name)}
           </h1>
-          <p className="font-body-md text-on-surface-variant flex items-center gap-2">
-            <span className="material-symbols-outlined text-[18px]">calendar_today</span>
-            {formatDate()}
-          </p>
         </section>
 
-        {/* Quick Stats Bento Grid */}
-        <section className="grid grid-cols-2 gap-3">
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col justify-between h-32">
-            <span className="font-label-sm text-label-sm text-on-surface-variant">Sisa Cuti</span>
-            <div>
-              <span className="font-headline-lg text-headline-lg text-primary">{leaveBalance.cuti}</span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant ml-1">Hari</span>
+        <section className={`rounded-2xl border p-4 ${todayMeta.surface}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wider opacity-80">Jadwal Hari Ini</p>
+              <h2 className="text-2xl font-bold mt-2">{todayMeta.label}</h2>
+              <p className="text-sm mt-1 opacity-85">{todayMeta.time}</p>
+              <p className="text-xs mt-3 opacity-75">{user?.position || "Farmasi"}</p>
+            </div>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${todayMeta.pill}`}>
+              <span className="material-symbols-outlined text-[30px]">{todayMeta.icon}</span>
             </div>
           </div>
-          <div className="space-y-3">
-            <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center gap-3">
-              <div className="bg-secondary-container text-on-secondary-container p-2 rounded-lg">
-                <span className="material-symbols-outlined text-[20px]">how_to_reg</span>
-              </div>
-              <div>
-                <div className="font-label-xs text-label-xs text-on-surface-variant uppercase">Kehadiran</div>
-                <div className="font-headline-md text-headline-md">{stats.attendance}%</div>
-              </div>
-            </div>
-            <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center gap-3">
-              <div className="bg-tertiary-fixed text-on-tertiary-fixed p-2 rounded-lg">
-                <span className="material-symbols-outlined text-[20px]">schedule</span>
-              </div>
-              <div>
-                <div className="font-label-xs text-label-xs text-on-surface-variant uppercase">Total Jam</div>
-                <div className="font-headline-md text-headline-md">{stats.totalHours}h</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Today's Schedule Card */}
-        <section>
-          <h2 className="font-label-sm text-label-sm text-on-surface-variant mb-3 uppercase tracking-wider">Jadwal Hari Ini</h2>
-          {todaySchedule ? (
-            <div className="relative bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary"></div>
-              <div className="p-5 flex justify-between items-start">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed font-label-xs text-label-xs">
-                      {todaySchedule.shiftType}
-                    </span>
-                    <span className="font-label-sm text-label-sm text-on-surface-variant">
-                      Lantai 1 • {todaySchedule.department}
-                    </span>
-                  </div>
-                  <div className="font-headline-lg text-headline-lg">{todaySchedule.time}</div>
-                  <p className="font-body-md text-on-surface-variant">
-                    {todaySchedule.hasClockedIn ? `Sudah Absen Masuk (${todaySchedule.clockInTime})` : "Belum Absen"}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-3">
-                  <button className="bg-primary text-on-primary font-label-sm text-label-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm active:scale-95 transition-transform">
-                    <span className="material-symbols-outlined text-[18px]">logout</span>
-                    Absen Keluar
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="relative bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm p-5">
-              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-outline"></div>
-              <div className="text-center">
-                <span className="font-headline-md text-on-surface-variant">Tidak ada jadwal hari ini</span>
-                <p className="font-body-md text-on-surface-variant mt-1">Libur atau belum ada jadwal</p>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* Quick Actions */}
-        <section className="grid grid-cols-3 gap-3">
-          <Link
-            href="/pegawai/requests"
-            className="bg-surface-container-low hover:bg-surface-container-high transition-colors p-4 rounded-xl flex flex-col items-center gap-2 group"
-          >
-            <span className="material-symbols-outlined text-primary group-active:scale-90 transition-transform">event_note</span>
-            <span className="font-label-sm text-label-sm text-center">Ajukan Jadwal</span>
-          </Link>
-          <Link
-            href="/pegawai/requests"
-            className="bg-surface-container-low hover:bg-surface-container-high transition-colors p-4 rounded-xl flex flex-col items-center gap-2 group"
-          >
-            <span className="material-symbols-outlined text-primary group-active:scale-90 transition-transform">swap_horiz</span>
-            <span className="font-label-sm text-label-sm text-center">Tukar Shift</span>
-          </Link>
-          <Link
-            href="/pegawai/roster"
-            className="bg-surface-container-low hover:bg-surface-container-high transition-colors p-4 rounded-xl flex flex-col items-center gap-2 group"
-          >
-            <span className="material-symbols-outlined text-primary group-active:scale-90 transition-transform">grid_view</span>
-            <span className="font-label-sm text-label-sm text-center">Lihat Roster</span>
-          </Link>
-        </section>
-
-        {/* Upcoming Shifts */}
-        <section>
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Shift Mendatang</h2>
-            <Link href="/pegawai/roster" className="text-primary font-label-sm text-label-sm">
-              Lihat Semua
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <Link
+              href="/pegawai/roster"
+              className="h-11 rounded-xl bg-surface-container-lowest/80 border border-outline-variant flex items-center justify-center gap-2 text-sm font-bold text-on-surface active:scale-[0.98] transition-transform"
+            >
+              <span className="material-symbols-outlined text-[18px]">calendar_month</span>
+              Roster Saya
+            </Link>
+            <Link
+              href="/pegawai/staff"
+              className="h-11 rounded-xl bg-surface-container-lowest/80 border border-outline-variant flex items-center justify-center gap-2 text-sm font-bold text-on-surface active:scale-[0.98] transition-transform"
+            >
+              <span className="material-symbols-outlined text-[18px]">groups</span>
+              Jadwal Teman
             </Link>
           </div>
-          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-            {upcomingShifts.map((shift, idx) => (
-              <div
-                key={idx}
-                className="min-w-[140px] bg-white border border-outline-variant p-4 rounded-xl space-y-3 flex-shrink-0"
-              >
-                <div className="font-label-sm text-label-sm text-on-surface-variant">
-                  {formatUpcomingDate(shift.date, idx)}
-                </div>
-                <div className="font-headline-md text-headline-md">{shift.time}</div>
-                <div className="h-1 w-full bg-surface-container rounded-full overflow-hidden">
-                  <div className={`h-full ${shiftColorMap[shift.shiftCode] || "bg-primary"} w-full`}></div>
-                </div>
-                <div className="font-label-xs text-label-xs text-on-surface-variant">{shift.label}</div>
-              </div>
-            ))}
+        </section>
+
+        <section className="grid grid-cols-4 gap-2 py-4">
+          <div className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 text-center">
+            <p className="text-lg font-bold text-primary">{monthSummary.work}</p>
+            <p className="text-[10px] text-outline">Dinas</p>
+          </div>
+          <div className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 text-center">
+            <p className="text-lg font-bold text-secondary">{monthSummary.night}</p>
+            <p className="text-[10px] text-outline">Malam</p>
+          </div>
+          <div className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 text-center">
+            <p className="text-lg font-bold text-on-surface">{monthSummary.off}</p>
+            <p className="text-[10px] text-outline">Libur</p>
+          </div>
+          <div className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 text-center">
+            <p className="text-lg font-bold text-tertiary">{leaveBalance.annualLeave}</p>
+            <p className="text-[10px] text-outline">Cuti</p>
           </div>
         </section>
 
-        {/* Activity Feed */}
-        <section>
-          <h2 className="font-label-sm text-label-sm text-on-surface-variant mb-3 uppercase tracking-wider">Aktivitas Terakhir</h2>
-          <div className="space-y-3">
-            {activities.length > 0 ? (
-              activities.map((activity) => {
-                const { icon, bg, color } = getActivityIcon(activity.type);
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-on-surface">Aksi Cepat</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Link href="/pegawai/roster" className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 text-center active:scale-[0.98] transition-transform">
+              <span className="material-symbols-outlined text-primary">edit_calendar</span>
+              <p className="text-xs font-bold mt-1">Ajukan</p>
+            </Link>
+            <Link href="/pegawai/staff" className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 text-center active:scale-[0.98] transition-transform">
+              <span className="material-symbols-outlined text-primary">travel_explore</span>
+              <p className="text-xs font-bold mt-1">Cek Bentrok</p>
+            </Link>
+            <Link href="/pegawai/requests" className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 text-center active:scale-[0.98] transition-transform">
+              <span className="material-symbols-outlined text-primary">pending_actions</span>
+              <p className="text-xs font-bold mt-1">Status</p>
+            </Link>
+          </div>
+        </section>
+
+        <section className="mt-5 rounded-xl bg-surface-container-lowest border border-outline-variant p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-on-surface">Status Pengajuan</h2>
+            <Link href="/pegawai/requests" className="text-xs font-bold text-primary">Detail</Link>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg bg-surface-container p-3">
+              <p className="text-lg font-bold text-on-surface">{requestSummary.PENDING}</p>
+              <p className="text-[10px] text-outline">Menunggu</p>
+            </div>
+            <div className="rounded-lg bg-green-50 p-3">
+              <p className="text-lg font-bold text-green-700">{requestSummary.APPROVED}</p>
+              <p className="text-[10px] text-green-700">Disetujui</p>
+            </div>
+            <div className="rounded-lg bg-error-container p-3">
+              <p className="text-lg font-bold text-on-error-container">{requestSummary.REJECTED}</p>
+              <p className="text-[10px] text-on-error-container">Ditolak</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-on-surface">Jadwal Terdekat</h2>
+            <Link href="/pegawai/roster" className="text-xs font-bold text-primary">Lihat semua</Link>
+          </div>
+          <div className="space-y-2">
+            {isLoading ? (
+              Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className="h-[70px] rounded-xl bg-surface-container animate-pulse" />
+              ))
+            ) : nextShifts.length === 0 ? (
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-5 text-center text-sm text-on-surface-variant">
+                Belum ada jadwal bulan ini
+              </div>
+            ) : (
+              nextShifts.map((assignment) => {
+                const key = getAssignmentKey(assignment);
+                const meta = shiftMeta[assignment.shiftType];
                 return (
-                  <div key={activity.id} className="flex gap-4 p-3 bg-surface-container-lowest border border-outline-variant rounded-xl items-start">
-                    <div className={`${bg} p-2 rounded-full flex-shrink-0`}>
-                      <span className={`material-symbols-outlined text-[20px] ${color}`}>{icon}</span>
+                  <div key={key} className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${meta.pill}`}>
+                      <span className="material-symbols-outlined text-[22px]">{meta.icon}</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <h4 className="font-label-sm text-label-sm text-on-surface">{activity.title}</h4>
-                        <span className="font-label-xs text-label-xs text-on-surface-variant">{activity.time}</span>
-                      </div>
-                      <p className="font-body-md text-on-surface-variant text-sm mt-0.5">{activity.description}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-on-surface">{formatShortDate(key)}</p>
+                      <p className="text-xs text-on-surface-variant">{meta.label} - {meta.time}</p>
                     </div>
+                    {key === todayKey && <span className="text-[10px] font-bold text-primary">Hari ini</span>}
                   </div>
                 );
               })
-            ) : (
-              <div className="text-center py-8 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[48px] opacity-50">history</span>
-                <p className="mt-2">Belum ada aktivitas</p>
-              </div>
             )}
           </div>
         </section>
+
+        <section className="mt-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-on-surface">Teman Dinas Hari Ini</h2>
+            <Link href="/pegawai/staff" className="text-xs font-bold text-primary">Semua</Link>
+          </div>
+          <div className="space-y-2">
+            {coworkersToday.length === 0 ? (
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-5 text-center text-sm text-on-surface-variant">
+                Belum ada rekan dinas yang tercatat hari ini
+              </div>
+            ) : (
+              coworkersToday.map((employee) => {
+                const meta = shiftMeta[employee.shiftType];
+                return (
+                  <div key={employee.id} className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container flex-shrink-0">
+                      {employee.avatarUrl ? (
+                        <img src={employee.avatarUrl} alt={employee.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="material-symbols-outlined text-on-surface-variant flex items-center justify-center h-full">person</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-on-surface truncate">{employee.name}</p>
+                      <p className="text-xs text-on-surface-variant truncate">{employee.position || "Pegawai"}</p>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-[10px] font-bold ${meta.pill}`}>{meta.code}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        {requests.length > 0 && (
+          <section className="mt-5 mb-2">
+            <h2 className="text-sm font-bold text-on-surface mb-3">Pengajuan Terakhir</h2>
+            <div className="space-y-2">
+              {requests.slice(0, 3).map((request) => {
+                const status = requestStatusMeta[request.status];
+                return (
+                  <div key={request.id} className="rounded-xl bg-surface-container-lowest border border-outline-variant p-3 flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${status.color}`}>
+                      <span className="material-symbols-outlined text-[20px]">{status.icon}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-on-surface truncate">{requestTypeLabels[request.type] || request.type}</p>
+                      <p className="text-xs text-on-surface-variant">{formatShortDate(request.startDate.split("T")[0])}</p>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-[10px] font-bold ${status.color}`}>{status.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </main>
 
       <EmployeeBottomNav />

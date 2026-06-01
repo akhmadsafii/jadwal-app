@@ -153,9 +153,10 @@ export const shiftCoverage: ShiftCoverage[] = [
 
 // Admin Navigation
 export const adminNavItems = [
-  { icon: "admin_panel_settings", label: "Admin", isActive: true },
-  { icon: "event_note", label: "Requests", isActive: false },
-  { icon: "calendar_view_month", label: "Roster", isActive: false },
+  { icon: "admin_panel_settings", label: "Admin", href: "/admin", isActive: true },
+  { icon: "event_note", label: "Requests", href: "/admin/approval", isActive: false },
+  { icon: "calendar_view_month", label: "Roster", href: "/admin/roster", isActive: false },
+  { icon: "manage_accounts", label: "Users", href: "/admin/users", isActive: false },
 ];
 
 // Admin User Profile

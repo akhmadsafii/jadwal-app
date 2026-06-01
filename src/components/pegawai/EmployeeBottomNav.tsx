@@ -8,7 +8,7 @@ export default function EmployeeBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 flex justify-around items-center px-4 pb-6 bg-surface border-t border-outline-variant h-20 z-50 shadow-sm">
+    <nav className="fixed bottom-0 left-0 right-0 flex justify-around items-center px-2 pb-6 bg-surface border-t border-outline-variant h-20 z-50 shadow-sm">
       {employeeNavItems.map((item, idx) => {
         const isActive = pathname === item.href;
 
@@ -16,7 +16,7 @@ export default function EmployeeBottomNav() {
           <Link
             key={idx}
             href={item.href}
-            className={`flex flex-col items-center justify-center px-5 py-1 transition-transform duration-150 active:scale-90 ${
+            className={`flex min-w-0 flex-1 flex-col items-center justify-center px-2 py-1 transition-transform duration-150 active:scale-90 ${
               isActive
                 ? "bg-secondary-container text-on-secondary-container rounded-full scale-95"
                 : "text-on-surface-variant hover:bg-surface-container-high"
@@ -28,7 +28,7 @@ export default function EmployeeBottomNav() {
             >
               {item.icon}
             </span>
-            <span className="text-xs">{item.label}</span>
+            <span className="text-[11px] leading-tight">{item.label}</span>
           </Link>
         );
       })}

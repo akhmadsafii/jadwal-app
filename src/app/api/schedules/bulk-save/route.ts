@@ -9,6 +9,11 @@ interface ScheduleItem {
   shiftType: ShiftType;
 }
 
+function parseDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export async function POST(request: Request) {
   try {
     const { schedules } = await request.json() as { schedules: ScheduleItem[] };
@@ -23,7 +28,7 @@ export async function POST(request: Request) {
     // Perform bulk upsert
     const results = await Promise.all(
       schedules.map(async (item) => {
-        const shiftDate = new Date(item.date);
+        const shiftDate = parseDateKey(item.date);
         shiftDate.setHours(0, 0, 0, 0);
 
         return prisma.shiftAssignment.upsert({

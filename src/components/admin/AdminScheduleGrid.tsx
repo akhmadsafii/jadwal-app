@@ -30,7 +30,7 @@ function mapShiftToCode(shiftType: string): string {
       return "L";
     case "CUTI":
       return "C";
-    case "TURUN_JAGA":
+    case "TURUN":
       return "X";
     default:
       return shiftType.charAt(0);

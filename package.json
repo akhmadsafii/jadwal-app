@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "postinstall": "prisma generate && prisma db push && tsx prisma/seed.ts",
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -25,6 +26,7 @@
     "prisma": "^7.8.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "tsx": "^4.22.3",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -39,7 +41,6 @@
     "eslint-config-next": "16.2.6",
     "playwright": "^1.60.0",
     "tailwindcss": "^4",
-    "tsx": "^4.22.3",
     "typescript": "^5"
   }
 }

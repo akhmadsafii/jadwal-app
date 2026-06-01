@@ -150,7 +150,8 @@ export const employeeRequestTypeOptions = [
 
 // Navigation items for logged-in employee (without Profile - accessed via avatar menu)
 export const employeeNavItems = [
+  { icon: "home", label: "Beranda", href: "/pegawai" },
   { icon: "calendar_month", label: "Roster", href: "/pegawai/roster" },
-  { icon: "groups", label: "Staff", href: "/pegawai/staff" },
+  { icon: "groups", label: "Jadwal", href: "/pegawai/staff" },
   { icon: "pending_actions", label: "Requests", href: "/pegawai/requests" },
 ];

@@ -1,6 +1,6 @@
 "use client";
 
-import { shiftDistribution, getMonthlyStats, getStaffAvailability } from "@/data/publicData";
+import { useEffect, useState } from "react";
 
 interface StatsSectionProps {
   selectedMonth?: { month: number; year: number };
@@ -18,12 +18,27 @@ export default function StatsSection({ selectedMonth }: StatsSectionProps) {
 
   const monthName = `${monthNames[month - 1]} ${year}`;
 
-  // Get dynamic stats based on selected month
-  const stats = getMonthlyStats(year, month);
-  const availability = getStaffAvailability(year, month);
+  const [data, setData] = useState<any>(null);
 
-  // Calculate staff counts from percentage
-  const totalStaff = 20;
+  useEffect(() => {
+    fetch(`/api/schedules?month=${month}&year=${year}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then(setData)
+      .catch(() => setData(null));
+  }, [month, year]);
+
+  const distribution = data?.shiftDistribution || [];
+  const stats = [
+    { label: "Total Hari Kerja", value: `${data?.monthlyStats?.totalWorkDays || 0} Hari`, colorClass: "text-primary" },
+    { label: "Persentase Kehadiran", value: `${data?.monthlyStats?.attendanceRate || 0}%`, colorClass: "text-tertiary" },
+    { label: "Total Jam Lembur", value: `${data?.monthlyStats?.overtimeHours || 0} Jam`, colorClass: "text-on-surface" },
+    { label: "Total Staff", value: `${data?.employees?.length || 0} Org`, colorClass: "text-secondary" },
+  ];
+  const onDuty = data?.employees?.filter((employee: any) =>
+    employee.schedule?.some((assignment: any) => assignment.shiftType !== "LIBUR")
+  ).length || 0;
+  const totalStaff = data?.employees?.length || 0;
+  const percentage = totalStaff > 0 ? Math.round((onDuty / totalStaff) * 100) : 0;
 
   return (
     <section className="mt-8 px-container-margin pb-24">
@@ -37,15 +52,14 @@ export default function StatsSection({ selectedMonth }: StatsSectionProps) {
           Distribusi Shift Bulan {monthName}
         </h3>
         <div className="space-y-4">
-          {shiftDistribution.map((shift, idx) => {
-            const staffCount = Math.round((shift.percentage / 100) * totalStaff);
+          {distribution.map((shift: any, idx: number) => {
             return (
               <div key={idx}>
                 <div className="flex justify-between items-center text-[10px] mb-1">
                   <span className="text-on-surface-variant font-semibold">
                     {shift.name}
                   </span>
-                  <span className="font-bold">{staffCount} Orang</span>
+                  <span className="font-bold">{shift.count || 0} Jadwal</span>
                 </div>
                 <div className="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
                   <div
@@ -62,9 +76,9 @@ export default function StatsSection({ selectedMonth }: StatsSectionProps) {
         <div className="mt-4 pt-4 border-t border-outline-variant">
           <p className="text-[10px] text-outline mb-2">Total Distribution</p>
           <div className="flex h-4 rounded-full overflow-hidden">
-            <div className="bg-primary" style={{ width: "45%" }} title="Pagi: 45%" />
-            <div className="bg-tertiary" style={{ width: "30%" }} title="Siang: 30%" />
-            <div className="bg-secondary" style={{ width: "25%" }} title="Malam: 25%" />
+            {distribution.map((shift: any) => (
+              <div key={shift.code} className={shift.color} style={{ width: `${shift.percentage}%` }} title={`${shift.name}: ${shift.percentage}%`} />
+            ))}
           </div>
         </div>
       </div>
@@ -102,13 +116,13 @@ export default function StatsSection({ selectedMonth }: StatsSectionProps) {
                 className="stroke-primary"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                strokeDasharray={`${availability.percentage}, 100`}
+                strokeDasharray={`${percentage}, 100`}
                 strokeWidth="4"
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-xs font-bold">
-                {availability.percentage}%
+                {percentage}%
               </span>
             </div>
           </div>
@@ -118,13 +132,13 @@ export default function StatsSection({ selectedMonth }: StatsSectionProps) {
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-primary" />
               <span className="text-[10px] text-on-surface-variant">
-                On-Duty ({availability.onDuty} org)
+                On-Duty ({onDuty} org)
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-surface-container-highest" />
               <span className="text-[10px] text-on-surface-variant">
-                Off-Duty ({availability.offDuty} org)
+                Off-Duty ({Math.max(totalStaff - onDuty, 0)} org)
               </span>
             </div>
           </div>

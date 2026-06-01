@@ -1,20 +1,101 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AdminTopBar from "@/components/admin/AdminTopBar";
 import CoverageSummary from "@/components/admin/CoverageSummary";
 import QuickActions from "@/components/admin/QuickActions";
 import ScheduleGrid from "@/components/admin/ScheduleGrid";
 import SaveActions from "@/components/admin/SaveActions";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
-import { adminStaff, ShiftType } from "@/data/adminData";
+import { ShiftType } from "@/data/adminData";
+
+interface AdminStaff {
+  id: string;
+  name: string;
+  staffId: string;
+  avatarUrl: string;
+  shift: ShiftType;
+}
+
+function getDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export default function AdminSchedulePage() {
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return { month: now.getMonth() + 1, year: now.getFullYear() };
+  });
   const [schedule, setSchedule] = useState<Record<string, Record<string, ShiftType>>>({});
+  const [staff, setStaff] = useState<AdminStaff[]>([]);
+  const [initialSchedule, setInitialSchedule] = useState<Record<string, Record<string, ShiftType>>>({});
+  const [isLoadingStaff, setIsLoadingStaff] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const toAdminStaff = (employee: any, loadedSchedule: Record<string, Record<string, ShiftType>> = {}): AdminStaff => {
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    return {
+      id: employee.id,
+      name: employee.name,
+      staffId: employee.nip,
+      avatarUrl: employee.avatarUrl || "",
+      shift: loadedSchedule[employee.id]?.[todayKey] || "LIBUR",
+    };
+  };
+
+  useEffect(() => {
+    const fetchStaffAndSchedule = async () => {
+      setIsLoadingStaff(true);
+      setLoadError("");
+
+      try {
+        const usersResponse = await fetch("/api/users?role=EMPLOYEE");
+        if (!usersResponse.ok) {
+          throw new Error("Gagal mengambil data pegawai");
+        }
+
+        const usersData = await usersResponse.json();
+        const employees = usersData.users || [];
+        setStaff(employees.map((employee: any) => toAdminStaff(employee)));
+
+        const scheduleResponse = await fetch(`/api/schedules?month=${currentMonth.month}&year=${currentMonth.year}`);
+
+        if (!scheduleResponse.ok) {
+          return;
+        }
+
+        const data = await scheduleResponse.json();
+        const loadedSchedule: Record<string, Record<string, ShiftType>> = {};
+        (data.employees || []).forEach((employee: any) => {
+          loadedSchedule[employee.id] = {};
+          employee.schedule?.forEach((assignment: any) => {
+            loadedSchedule[employee.id][assignment.dateKey || assignment.date.split("T")[0]] = assignment.shiftType;
+          });
+        });
+
+        setStaff(
+          employees.map((employee: any) => toAdminStaff(employee, loadedSchedule))
+        );
+        setInitialSchedule(loadedSchedule);
+        setSchedule(loadedSchedule);
+      } catch (error) {
+        console.error("Failed to load admin schedule data:", error);
+        setLoadError("Data pegawai belum bisa dimuat. Pastikan tabel User sudah berisi pegawai.");
+      } finally {
+        setIsLoadingStaff(false);
+      }
+    };
+
+    fetchStaffAndSchedule();
+  }, [currentMonth.month, currentMonth.year]);
+
   const handleShiftChange = (staffId: string, date: Date, shift: ShiftType) => {
-    const dateKey = date.toISOString().split("T")[0];
+    const dateKey = getDateKey(date);
     setSchedule((prev) => ({
       ...prev,
       [staffId]: {
@@ -25,25 +106,21 @@ export default function AdminSchedulePage() {
   };
 
   const handleAutoFill = () => {
-    // Auto-fill logic - assign shifts evenly
     const newSchedule: Record<string, Record<string, ShiftType>> = {};
-    const shifts: ShiftType[] = ["PAGI", "MIDDLE", "SIANG", "MALAM"];
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+    const shifts: ShiftType[] = ["PAGI", "MIDDLE", "SIANG", "MALAM", "LIBUR"];
+    const daysInMonth = new Date(currentMonth.year, currentMonth.month, 0).getDate();
 
-    adminStaff.forEach((staff, staffIdx) => {
-      newSchedule[staff.id] = {};
-      for (let day = 0; day < 7; day++) {
-        const date = new Date(weekStart);
-        date.setDate(weekStart.getDate() + day);
-        const dateKey = date.toISOString().split("T")[0];
-        // Distribute shifts evenly: PAGI, MIDDLE, SIANG
-        const shiftIndex = (staffIdx + day) % 3;
-        newSchedule[staff.id][dateKey] = shifts[shiftIndex];
+    staff.forEach((member, staffIdx) => {
+      newSchedule[member.id] = {};
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateKey = `${currentMonth.year}-${String(currentMonth.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const shiftIndex = (staffIdx + day - 1) % shifts.length;
+        newSchedule[member.id][dateKey] = shifts[shiftIndex];
       }
     });
 
     setSchedule(newSchedule);
+    setInitialSchedule(newSchedule);
   };
 
   const handleBulkCopy = () => {
@@ -51,28 +128,30 @@ export default function AdminSchedulePage() {
     const newSchedule = { ...schedule };
     const today = new Date();
 
-    adminStaff.forEach((staff) => {
-      const staffSchedule = schedule[staff.id];
+    staff.forEach((member) => {
+      const staffSchedule = schedule[member.id];
       if (staffSchedule) {
         // Copy to next week
         Object.entries(staffSchedule).forEach(([dateKey, shift]) => {
           const date = new Date(dateKey);
           date.setDate(date.getDate() + 7);
-          const newDateKey = date.toISOString().split("T")[0];
-          if (!newSchedule[staff.id]) {
-            newSchedule[staff.id] = {};
+          const newDateKey = getDateKey(date);
+          if (!newSchedule[member.id]) {
+            newSchedule[member.id] = {};
           }
-          newSchedule[staff.id][newDateKey] = shift;
+          newSchedule[member.id][newDateKey] = shift;
         });
       }
     });
 
     setSchedule(newSchedule);
+    setInitialSchedule(newSchedule);
   };
 
   const handleClearAll = () => {
-    if (confirm("Apakah Anda yakin ingin menghapus semua jadwal minggu ini?")) {
+    if (confirm("Apakah Anda yakin ingin menghapus semua perubahan jadwal bulan ini?")) {
       setSchedule({});
+      setInitialSchedule({});
     }
   };
 
@@ -92,14 +171,33 @@ export default function AdminSchedulePage() {
           onBulkCopy={handleBulkCopy}
           onClearAll={handleClearAll}
         />
-        <ScheduleGrid
-          staff={adminStaff}
-          onShiftChange={handleShiftChange}
-        />
-        <SaveActions
-          schedule={schedule}
-          onPublishSuccess={handlePublishSuccess}
-        />
+        {isLoadingStaff ? (
+          <div className="mx-container-margin rounded-xl border border-outline-variant bg-surface-container-lowest p-6 text-center text-sm text-outline">
+            Memuat daftar pegawai...
+          </div>
+        ) : loadError ? (
+          <div className="mx-container-margin rounded-xl border border-error/20 bg-error-container p-6 text-center text-sm text-on-error-container">
+            {loadError}
+          </div>
+        ) : staff.length === 0 ? (
+          <div className="mx-container-margin rounded-xl border border-outline-variant bg-surface-container-lowest p-6 text-center text-sm text-outline">
+            Belum ada pegawai di database. Tambahkan data pegawai dulu agar jadwal bisa diinput.
+          </div>
+        ) : (
+          <>
+            <ScheduleGrid
+              staff={staff}
+              initialDate={new Date(currentMonth.year, currentMonth.month - 1, 1)}
+              initialSchedule={initialSchedule}
+              onMonthChange={setCurrentMonth}
+              onShiftChange={handleShiftChange}
+            />
+            <SaveActions
+              schedule={schedule}
+              onPublishSuccess={handlePublishSuccess}
+            />
+          </>
+        )}
       </main>
 
       {showSuccess && (

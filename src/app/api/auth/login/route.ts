@@ -29,6 +29,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!user.isActive) {
+      return NextResponse.json(
+        { error: "Akun ini sedang dinonaktifkan. Hubungi admin." },
+        { status: 403 }
+      );
+    }
+
     // Check password
     const isDefaultPassword = password === "12345678";
     const isValidPassword = isDefaultPassword || await bcrypt.compare(password, user.password);

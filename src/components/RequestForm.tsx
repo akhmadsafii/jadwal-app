@@ -1,21 +1,55 @@
 "use client";
 
 import { useState } from "react";
-import { requestTypeOptions } from "@/data/mockData";
+import { useAuth } from "@/lib/authContext";
+
+const requestTypeOptions = [
+  { value: "SHIFT_PAGI", label: "Shift Pagi (07-14)" },
+  { value: "SHIFT_MIDDLE", label: "Shift Middle (10-17)" },
+  { value: "SHIFT_SIANG", label: "Shift Siang (14-21)" },
+  { value: "SHIFT_MALAM", label: "Shift Malam (21-07)" },
+  { value: "CUTI_TAHUNAN", label: "Cuti Tahunan" },
+  { value: "CUTI_SAKIT", label: "Cuti Sakit" },
+  { value: "TUKAR_SHIFT", label: "Tukar Shift" },
+];
 
 export default function RequestForm() {
+  const { user } = useAuth();
   const [status, setStatus] = useState<
     "idle" | "submitting" | "success" | "error"
   >("idle");
+  const today = new Date().toISOString().split("T")[0];
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+  const [requestType, setRequestType] = useState(requestTypeOptions[0].value);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!user?.id) {
+      setStatus("error");
+      return;
+    }
+
     setStatus("submitting");
-    setTimeout(() => {
+    const response = await fetch("/api/requests/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: user.id,
+        type: requestType,
+        startDate,
+        endDate,
+      }),
+    });
+
+    if (response.ok) {
       setStatus("success");
       setTimeout(() => {
         setStatus("idle");
       }, 2000);
-    }, 1000);
+      return;
+    }
+
+    setStatus("error");
   };
 
   const getButtonText = () => {
@@ -24,6 +58,8 @@ export default function RequestForm() {
         return "Mengirim...";
       case "success":
         return "Berhasil Terkirim!";
+      case "error":
+        return "Gagal Mengirim";
       default:
         return "Kirim Pengajuan";
     }
@@ -34,6 +70,9 @@ export default function RequestForm() {
       "w-full h-12 font-headline text-headline-md rounded-xl hover:opacity-90 active:scale-95 transition-all";
     if (status === "success") {
       return `${baseClasses} bg-green-600 text-white`;
+    }
+    if (status === "error") {
+      return `${baseClasses} bg-error text-on-error`;
     }
     if (status === "submitting") {
       return `${baseClasses} bg-primary text-on-primary opacity-50`;
@@ -57,7 +96,12 @@ export default function RequestForm() {
               <span className="material-symbols-outlined text-[18px] text-secondary">
                 calendar_today
               </span>
-              <span className="text-body-md font-body-md">24 Okt 2023</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="w-full bg-transparent text-body-md font-body-md outline-none"
+              />
             </div>
           </div>
 
@@ -70,7 +114,13 @@ export default function RequestForm() {
               <span className="material-symbols-outlined text-[18px] text-secondary">
                 calendar_today
               </span>
-              <span className="text-body-md font-body-md">25 Okt 2023</span>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                className="w-full bg-transparent text-body-md font-body-md outline-none"
+              />
             </div>
           </div>
         </div>
@@ -80,7 +130,11 @@ export default function RequestForm() {
           <label className="font-label text-label-xs text-on-surface-variant uppercase">
             Jenis Pengajuan
           </label>
-          <select className="w-full border border-outline-variant rounded px-2 py-2 bg-surface font-body-md text-body-md focus:ring-1 focus:ring-primary focus:border-primary outline-none">
+          <select
+            value={requestType}
+            onChange={(event) => setRequestType(event.target.value)}
+            className="w-full border border-outline-variant rounded px-2 py-2 bg-surface font-body-md text-body-md focus:ring-1 focus:ring-primary focus:border-primary outline-none"
+          >
             {requestTypeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}

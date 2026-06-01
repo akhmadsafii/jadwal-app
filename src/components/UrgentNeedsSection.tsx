@@ -1,8 +1,28 @@
 "use client";
 
-import { urgentNeeds } from "@/data/mockData";
+import { useEffect, useState } from "react";
 
 export default function UrgentNeedsSection() {
+  const [urgentNeeds, setUrgentNeeds] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/requests?status=PENDING")
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        const items = (data?.requests || []).slice(0, 2).map((request: any) => ({
+          id: request.id,
+          date: new Date(request.startDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }).toUpperCase(),
+          title: request.description || request.type.replaceAll("_", " "),
+          icon: request.type === "CUTI_TAHUNAN" ? "event_busy" : "priority_high",
+          bgColor: "bg-error-container",
+          textColor: "text-on-error-container",
+          borderColor: "border-error/20",
+        }));
+        setUrgentNeeds(items);
+      })
+      .catch(() => setUrgentNeeds([]));
+  }, []);
+
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
@@ -14,7 +34,11 @@ export default function UrgentNeedsSection() {
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        {urgentNeeds.map((need) => (
+        {urgentNeeds.length === 0 ? (
+          <div className="col-span-2 p-4 text-center text-sm text-outline bg-surface-container border border-outline-variant rounded-xl">
+            Tidak ada kebutuhan mendesak
+          </div>
+        ) : urgentNeeds.map((need) => (
           <div
             key={need.id}
             className={`${need.bgColor} p-3 rounded-xl border ${need.borderColor} flex flex-col justify-between h-24`}

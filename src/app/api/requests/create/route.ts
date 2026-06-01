@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+function parseLocalDate(dateString: string) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export async function POST(request: Request) {
   try {
     const { userId, type, startDate, endDate, description } = await request.json();
@@ -12,12 +17,35 @@ export async function POST(request: Request) {
       );
     }
 
+    const parsedStartDate = parseLocalDate(startDate);
+    const parsedEndDate = endDate ? parseLocalDate(endDate) : parsedStartDate;
+
+    const existingPendingRequest = await prisma.shiftRequest.findFirst({
+      where: {
+        userId,
+        type,
+        status: "PENDING",
+        startDate: { lte: parsedEndDate },
+        OR: [
+          { endDate: null, startDate: { gte: parsedStartDate } },
+          { endDate: { gte: parsedStartDate } },
+        ],
+      },
+    });
+
+    if (existingPendingRequest) {
+      return NextResponse.json(
+        { error: "Pengajuan yang sama masih menunggu approval admin" },
+        { status: 409 }
+      );
+    }
+
     const shiftRequest = await prisma.shiftRequest.create({
       data: {
         userId,
         type,
-        startDate: new Date(startDate),
-        endDate: endDate ? new Date(endDate) : null,
+        startDate: parsedStartDate,
+        endDate: endDate ? parsedEndDate : null,
         description,
         status: "PENDING",
       },

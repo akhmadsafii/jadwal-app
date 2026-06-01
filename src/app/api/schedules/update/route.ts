@@ -9,6 +9,11 @@ interface UpdateScheduleRequest {
   shiftType: ShiftType;
 }
 
+function parseDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export async function POST(request: Request) {
   try {
     const data: UpdateScheduleRequest = await request.json();
@@ -20,7 +25,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const shiftDate = new Date(data.date);
+    const shiftDate = parseDateKey(data.date);
     shiftDate.setHours(0, 0, 0, 0);
 
     const assignment = await prisma.shiftAssignment.upsert({

@@ -34,38 +34,37 @@ export default function MonthSelector({ onMonthChange, selectedMonth, selectedYe
         setMonthInfo(getCurrentMonthInfo(newDate));
       }
     }
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear, currentDate]);
 
+  // Update monthInfo when currentDate changes
   useEffect(() => {
     setMonthInfo(getCurrentMonthInfo(currentDate));
+  }, [currentDate]);
+
+  // Initial callback call
+  useEffect(() => {
     if (!hasInitialized.current) {
       hasInitialized.current = true;
       onMonthChangeRef.current?.(currentDate.getMonth() + 1, currentDate.getFullYear());
     }
-  }, [currentDate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const goToPrevMonth = () => {
-    setCurrentDate((prev) => {
-      const newDate = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
-      setMonthInfo(getCurrentMonthInfo(newDate));
-      onMonthChangeRef.current?.(newDate.getMonth() + 1, newDate.getFullYear());
-      return newDate;
-    });
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    setCurrentDate(newDate);
+    onMonthChangeRef.current?.(newDate.getMonth() + 1, newDate.getFullYear());
   };
 
   const goToNextMonth = () => {
-    setCurrentDate((prev) => {
-      const newDate = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
-      setMonthInfo(getCurrentMonthInfo(newDate));
-      onMonthChangeRef.current?.(newDate.getMonth() + 1, newDate.getFullYear());
-      return newDate;
-    });
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    setCurrentDate(newDate);
+    onMonthChangeRef.current?.(newDate.getMonth() + 1, newDate.getFullYear());
   };
 
   const goToCurrentMonth = () => {
     const now = new Date();
     setCurrentDate(now);
-    setMonthInfo(getCurrentMonthInfo(now));
     onMonthChangeRef.current?.(now.getMonth() + 1, now.getFullYear());
   };
 

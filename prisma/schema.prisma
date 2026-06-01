@@ -57,8 +57,11 @@ model ShiftRequest {
 
 enum RequestType {
   SHIFT_PAGI
+  SHIFT_MIDDLE
+  SHIFT_SIANG
   SHIFT_MALAM
   CUTI_TAHUNAN
+  CUTI_SAKIT
   TUKAR_SHIFT
 }
 

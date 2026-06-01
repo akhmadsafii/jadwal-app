@@ -1,8 +1,37 @@
 "use client";
 
-import { shiftCoverage } from "@/data/adminData";
+import { useEffect, useState } from "react";
+
+const coverageMeta = [
+  { name: "PAGI", time: "07:00 - 14:00", color: "bg-primary" },
+  { name: "MIDDLE", time: "10:00 - 17:00", color: "bg-tertiary" },
+  { name: "SIANG", time: "14:00 - 21:00", color: "bg-tertiary" },
+  { name: "MALAM", time: "21:00 - 07:00", color: "bg-secondary" },
+];
 
 export default function CoverageSummary() {
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [totalStaff, setTotalStaff] = useState(0);
+
+  useEffect(() => {
+    const now = new Date();
+    fetch(`/api/schedules?month=${now.getMonth() + 1}&year=${now.getFullYear()}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        setCounts(data?.shiftCounts || {});
+        setTotalStaff(data?.employees?.length || 0);
+      })
+      .catch(() => {
+        setCounts({});
+        setTotalStaff(0);
+      });
+  }, []);
+
+  const shiftCoverage = coverageMeta.map((shift) => ({
+    ...shift,
+    current: counts[shift.name] || 0,
+    total: Math.max(totalStaff, 1),
+  }));
   const vacancies = shiftCoverage.filter(s => s.current < s.total).length;
 
   return (

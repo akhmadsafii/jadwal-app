@@ -26,6 +26,7 @@ interface ScheduleData {
     attendanceRate: number;
     overtimeHours: number;
   };
+  shiftCounts: Record<string, number>;
 }
 
 export default function AdminRosterPage() {
@@ -72,6 +73,7 @@ export default function AdminRosterPage() {
   const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
   const employees = scheduleData?.employees || [];
   const monthlyStats = scheduleData?.monthlyStats;
+  const shiftCounts = scheduleData?.shiftCounts || {};
 
   const onDuty = employees.length;
 
@@ -86,6 +88,8 @@ export default function AdminRosterPage() {
           <ExportButton
             month={selectedMonth}
             year={selectedYear}
+            employees={employees}
+            monthlyStats={monthlyStats}
           />
         </div>
 
@@ -129,21 +133,21 @@ export default function AdminRosterPage() {
                 <div className="w-8 h-8 mx-auto bg-tertiary/10 rounded-lg flex items-center justify-center mb-2">
                   <span className="material-symbols-outlined text-tertiary text-[18px]">schedule</span>
                 </div>
-                <p className="text-lg font-bold text-tertiary">{Math.floor(onDuty * 0.3)}</p>
+                <p className="text-lg font-bold text-tertiary">{shiftCounts.PAGI || 0}</p>
                 <p className="text-[10px] text-on-surface-variant">Pagi</p>
               </div>
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-center">
                 <div className="w-8 h-8 mx-auto bg-tertiary/10 rounded-lg flex items-center justify-center mb-2">
                   <span className="material-symbols-outlined text-tertiary text-[18px]">light_mode</span>
                 </div>
-                <p className="text-lg font-bold text-tertiary">{Math.floor(onDuty * 0.35)}</p>
+                <p className="text-lg font-bold text-tertiary">{shiftCounts.SIANG || 0}</p>
                 <p className="text-[10px] text-on-surface-variant">Siang</p>
               </div>
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-center">
                 <div className="w-8 h-8 mx-auto bg-secondary/10 rounded-lg flex items-center justify-center mb-2">
                   <span className="material-symbols-outlined text-secondary text-[18px]">nightlight</span>
                 </div>
-                <p className="text-lg font-bold text-secondary">{Math.floor(onDuty * 0.35)}</p>
+                <p className="text-lg font-bold text-secondary">{shiftCounts.MALAM || 0}</p>
                 <p className="text-[10px] text-on-surface-variant">Malam</p>
               </div>
             </div>
@@ -171,11 +175,11 @@ export default function AdminRosterPage() {
               <div className="grid grid-cols-2">
                 <div className="p-4 border-r border-b border-outline-variant">
                   <p className="text-[10px] text-on-surface-variant uppercase">Total Hari Kerja</p>
-                  <p className="text-xl font-bold text-on-surface">{monthlyStats?.totalWorkDays || 22} Hari</p>
+                  <p className="text-xl font-bold text-on-surface">{monthlyStats?.totalWorkDays || 0} Hari</p>
                 </div>
                 <div className="p-4 border-b border-outline-variant">
                   <p className="text-[10px] text-on-surface-variant uppercase">Kehadiran</p>
-                  <p className="text-xl font-bold text-on-surface">{monthlyStats?.attendanceRate || 98.5}%</p>
+                  <p className="text-xl font-bold text-on-surface">{monthlyStats?.attendanceRate || 0}%</p>
                 </div>
                 <div className="p-4 border-r border-outline-variant">
                   <p className="text-[10px] text-on-surface-variant uppercase">Total Jam Lembur</p>

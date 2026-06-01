@@ -1,6 +1,10 @@
 "use client";
 
-import { navItems } from "@/data/mockData";
+const navItems = [
+  { icon: "admin_panel_settings", label: "Admin" },
+  { icon: "event_note", label: "Requests", isActive: true },
+  { icon: "calendar_view_month", label: "Roster" },
+];
 
 export default function BottomNavBar() {
   return (

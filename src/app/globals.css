@@ -52,8 +52,17 @@
 }
 
 @layer base {
+  html {
+    min-height: 100%;
+    background: #faf8ff;
+    overscroll-behavior-y: none;
+  }
+
   body {
     @apply bg-background text-on-background min-h-screen pb-24;
+    min-height: 100dvh;
+    padding-bottom: max(6rem, env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color: transparent;
   }
 }
 

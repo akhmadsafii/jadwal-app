@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   AdminStaff,
   ShiftType,
@@ -9,20 +9,36 @@ import {
   shiftTypeShortLabel,
   gridCellColors,
   gridCellActiveColor,
-  getWeekDays,
-  formatDate,
 } from "@/data/adminData";
 
 interface ScheduleGridProps {
   staff: AdminStaff[];
   initialDate?: Date;
+  initialSchedule?: Record<string, Record<string, ShiftType>>;
+  onMonthChange?: (value: { month: number; year: number }) => void;
   onShiftChange?: (staffId: string, date: Date, shift: ShiftType) => void;
   onBulkShift?: (shift: ShiftType) => void;
+}
+
+function getDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getMonthDays(date: Date): Date[] {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return Array.from({ length: daysInMonth }, (_, index) => new Date(year, month, index + 1));
 }
 
 export default function ScheduleGrid({
   staff,
   initialDate = new Date(),
+  initialSchedule = {},
+  onMonthChange,
   onShiftChange,
   onBulkShift,
 }: ScheduleGridProps) {
@@ -32,48 +48,69 @@ export default function ScheduleGrid({
     date: Date;
   } | null>(null);
   const [selectedShift, setSelectedShift] = useState<ShiftType>("PAGI");
+  const [isPainting, setIsPainting] = useState(false);
   const [schedule, setSchedule] = useState<Record<string, Record<string, ShiftType>>>(
-    {}
+    initialSchedule
   );
 
-  const weekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
+  useEffect(() => {
+    setSchedule(initialSchedule);
+  }, [initialSchedule]);
 
-  const navigateWeek = (direction: number) => {
+  useEffect(() => {
+    setCurrentDate(initialDate);
+  }, [initialDate]);
+
+  const monthDays = useMemo(() => getMonthDays(currentDate), [currentDate]);
+
+  const navigateMonth = (direction: number) => {
     const newDate = new Date(currentDate);
-    newDate.setDate(currentDate.getDate() + direction * 7);
+    newDate.setMonth(currentDate.getMonth() + direction);
     setCurrentDate(newDate);
+    onMonthChange?.({ month: newDate.getMonth() + 1, year: newDate.getFullYear() });
     setSelectedCell(null);
   };
 
   const goToToday = () => {
-    setCurrentDate(new Date());
+    const today = new Date();
+    setCurrentDate(today);
+    onMonthChange?.({ month: today.getMonth() + 1, year: today.getFullYear() });
     setSelectedCell(null);
   };
 
   const getShift = (staffId: string, date: Date): ShiftType | null => {
-    const dateKey = date.toISOString().split("T")[0];
+    const dateKey = getDateKey(date);
     return schedule[staffId]?.[dateKey] ?? null;
   };
 
-  const handleCellClick = (staffId: string, date: Date) => {
+  const applySelectedShift = (staffId: string, date: Date) => {
     setSelectedCell({ staffId, date });
-    const dateKey = date.toISOString().split("T")[0];
-    const currentShift = schedule[staffId]?.[dateKey];
+    updateShift(staffId, date, selectedShift);
+  };
 
-    if (currentShift) {
-      // Cycle through shifts
-      const currentIndex = shiftOptions.indexOf(currentShift);
-      const nextIndex = (currentIndex + 1) % shiftOptions.length;
-      const newShift = shiftOptions[nextIndex];
-      updateShift(staffId, date, newShift);
-    } else {
-      // Set default shift
-      updateShift(staffId, date, "PAGI");
-    }
+  const handleCellMouseDown = (staffId: string, date: Date) => {
+    setIsPainting(true);
+    applySelectedShift(staffId, date);
+  };
+
+  const handleCellMouseEnter = (staffId: string, date: Date) => {
+    if (!isPainting) return;
+    applySelectedShift(staffId, date);
+  };
+
+  const handleCellTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    const cell = element?.closest<HTMLElement>("[data-staff-id][data-date-key]");
+    const staffId = cell?.dataset.staffId;
+    const dateKey = cell?.dataset.dateKey;
+    if (!staffId || !dateKey) return;
+    const [cellYear, cellMonth, cellDay] = dateKey.split("-").map(Number);
+    applySelectedShift(staffId, new Date(cellYear, cellMonth - 1, cellDay));
   };
 
   const updateShift = (staffId: string, date: Date, shift: ShiftType) => {
-    const dateKey = date.toISOString().split("T")[0];
+    const dateKey = getDateKey(date);
     setSchedule((prev) => ({
       ...prev,
       [staffId]: {
@@ -84,11 +121,13 @@ export default function ScheduleGrid({
     onShiftChange?.(staffId, date, shift);
   };
 
-  const handleBulkAssign = (shift: ShiftType) => {
-    if (!selectedCell) return;
-    updateShift(selectedCell.staffId, selectedCell.date, shift);
+  const handleShiftToolSelect = (shift: ShiftType) => {
     setSelectedShift(shift);
     onBulkShift?.(shift);
+  };
+
+  const fillRowWithShift = (staffId: string, shift: ShiftType) => {
+    monthDays.forEach((date) => updateShift(staffId, date, shift));
   };
 
   const isToday = (date: Date): boolean => {
@@ -101,11 +140,11 @@ export default function ScheduleGrid({
   };
 
   const getCellClass = (staffId: string, date: Date): string => {
-    const dateKey = date.toISOString().split("T")[0];
+    const dateKey = getDateKey(date);
     const shift = schedule[staffId]?.[dateKey];
     const isSelected =
       selectedCell?.staffId === staffId &&
-      selectedCell?.date.toISOString().split("T")[0] === dateKey;
+      getDateKey(selectedCell.date) === dateKey;
 
     let baseClass =
       "h-10 flex items-center justify-center text-label-sm font-bold rounded cursor-pointer transition-all border ";
@@ -121,16 +160,17 @@ export default function ScheduleGrid({
   };
 
   const getCellContent = (staffId: string, date: Date): string => {
-    const dateKey = date.toISOString().split("T")[0];
+    const dateKey = getDateKey(date);
     const shift = schedule[staffId]?.[dateKey];
     if (!shift) return "";
     return shiftTypeShortLabel[shift];
   };
 
-  const calculateWeeklyHours = (staffId: string): number => {
+  const calculateMonthlyHours = (staffId: string): number => {
     let hours = 0;
     const staffSchedule = schedule[staffId] || {};
-    Object.values(staffSchedule).forEach((shift) => {
+    monthDays.forEach((day) => {
+      const shift = staffSchedule[getDateKey(day)];
       if (shift === "PAGI") hours += 7;
       else if (shift === "MIDDLE") hours += 7;
       else if (shift === "SIANG") hours += 7;
@@ -151,7 +191,7 @@ export default function ScheduleGrid({
       {/* Week Navigation */}
       <div className="px-container-margin flex items-center justify-between gap-4 py-2">
         <button
-          onClick={() => navigateWeek(-1)}
+          onClick={() => navigateMonth(-1)}
           className="p-2 hover:bg-surface-container rounded-full transition-colors"
         >
           <span className="material-symbols-outlined text-[20px]">
@@ -172,7 +212,7 @@ export default function ScheduleGrid({
           )}
         </div>
         <button
-          onClick={() => navigateWeek(1)}
+          onClick={() => navigateMonth(1)}
           className="p-2 hover:bg-surface-container rounded-full transition-colors"
         >
           <span className="material-symbols-outlined text-[20px]">
@@ -182,53 +222,59 @@ export default function ScheduleGrid({
       </div>
 
       {/* Quick Assign Toolbar */}
-      {selectedCell && (
-        <div className="sticky top-0 z-30 bg-primary/5 border-y border-primary/20 px-container-margin py-2 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-3">
-            <span className="text-label-sm font-bold text-primary flex-shrink-0">
-              QUICK ASSIGN:
-            </span>
-            <div className="flex gap-1.5">
-              {shiftOptions.map((shift) => (
-                <button
-                  key={shift}
-                  onClick={() => handleBulkAssign(shift)}
-                  className={`px-3 py-1 text-label-sm font-bold rounded-full transition-all ${
-                    selectedShift === shift
-                      ? "bg-primary text-on-primary"
-                      : "bg-white border border-outline-variant hover:bg-surface-container"
-                  }`}
-                >
-                  {shiftTypeLabelMap[shift]}
-                </button>
-              ))}
-            </div>
-            <div className="flex-1" />
+      <div className="sticky top-0 z-30 bg-surface-container-lowest border-y border-outline-variant px-container-margin py-2">
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
+          <span className="text-label-sm font-bold text-primary flex-shrink-0">
+            Pilih Shift:
+          </span>
+          {shiftOptions.map((shift) => (
             <button
-              onClick={() => setSelectedCell(null)}
-              className="p-1 text-on-surface-variant hover:bg-surface-container rounded-full"
+              key={shift}
+              onClick={() => handleShiftToolSelect(shift)}
+              className={`px-3 py-1.5 text-label-sm font-bold rounded-full transition-all flex-shrink-0 ${
+                selectedShift === shift
+                  ? "bg-primary text-on-primary shadow-sm"
+                  : "bg-white border border-outline-variant hover:bg-surface-container"
+              }`}
             >
-              <span className="material-symbols-outlined text-[18px]">
-                close
-              </span>
+              {shiftTypeLabelMap[shift]}
             </button>
-          </div>
+          ))}
         </div>
-      )}
+        <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-on-surface-variant">
+          <span>
+            Mode cepat: klik atau drag sel untuk mengisi <b>{shiftTypeLabelMap[selectedShift]}</b>.
+          </span>
+          {selectedCell && (
+            <button
+              type="button"
+              onClick={() => setSelectedCell(null)}
+              className="rounded-full bg-surface-container px-2 py-1 font-bold text-outline"
+            >
+              Batal pilih
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Schedule Grid */}
-      <div className="overflow-x-auto custom-scrollbar">
-        <table className="w-full border-collapse bg-white min-w-[800px]">
+      <div
+        className="overflow-x-auto custom-scrollbar"
+        onMouseLeave={() => setIsPainting(false)}
+        onMouseUp={() => setIsPainting(false)}
+        onTouchEnd={() => setIsPainting(false)}
+      >
+        <table className="w-full border-collapse bg-white min-w-[1280px]">
           <thead>
             <tr className="bg-surface-container-low border-b border-outline-variant">
-              <th className="w-48 sticky left-0 z-20 bg-surface-container-low p-2 text-left text-label-sm font-bold border-r border-outline-variant">
+              <th className="w-56 sticky left-0 z-20 bg-surface-container-low p-2 text-left text-label-sm font-bold border-r border-outline-variant">
                 Staff Member
               </th>
-              {weekDays.map((day, idx) => (
+              {monthDays.map((day, idx) => (
                 <th
                   key={idx}
-                  className={`p-2 text-center text-label-sm font-bold border-r border-outline-variant ${
-                    isToday(day) ? "bg-primary/5 text-primary" : ""
+                  className={`min-w-10 p-2 text-center text-label-sm font-bold border-r border-outline-variant ${
+                    isToday(day) ? "bg-primary/5 text-primary" : day.getDay() === 0 ? "bg-error-container/20 text-error" : ""
                   }`}
                 >
                   {day.toLocaleDateString("id-ID", { weekday: "short" })}
@@ -242,13 +288,13 @@ export default function ScheduleGrid({
                 </th>
               ))}
               <th className="w-16 p-2 text-center text-label-sm font-bold">
-                Total
+                Jam
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant/50">
             {staff.map((member) => {
-              const totalHours = calculateWeeklyHours(member.id);
+              const totalHours = calculateMonthlyHours(member.id);
               return (
                 <tr key={member.id} className="group hover:bg-primary/5">
                   <td className="sticky left-0 z-20 bg-white group-hover:bg-primary/5 p-2 border-r border-outline-variant">
@@ -268,9 +314,17 @@ export default function ScheduleGrid({
                           ID: {member.staffId}
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => fillRowWithShift(member.id, selectedShift)}
+                        className="ml-auto flex-shrink-0 h-8 w-8 rounded-full bg-surface-container text-on-surface-variant hover:bg-primary hover:text-on-primary transition-colors"
+                        title={`Isi semua tanggal dengan ${shiftTypeLabelMap[selectedShift]}`}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">format_paint</span>
+                      </button>
                     </div>
                   </td>
-                  {weekDays.map((day, dayIdx) => (
+                  {monthDays.map((day, dayIdx) => (
                     <td
                       key={dayIdx}
                       className={`p-0 border-r border-outline-variant cursor-pointer ${
@@ -278,10 +332,15 @@ export default function ScheduleGrid({
                       }`}
                     >
                       <div
-                        onClick={() => handleCellClick(member.id, day)}
+                        data-staff-id={member.id}
+                        data-date-key={getDateKey(day)}
+                        onMouseDown={() => handleCellMouseDown(member.id, day)}
+                        onMouseEnter={() => handleCellMouseEnter(member.id, day)}
+                        onTouchStart={() => handleCellMouseDown(member.id, day)}
+                        onTouchMove={handleCellTouchMove}
                         className={getCellClass(member.id, day)}
                       >
-                        {getCellContent(member.id, day)}
+                        {getCellContent(member.id, day) || "-"}
                       </div>
                     </td>
                   ))}
