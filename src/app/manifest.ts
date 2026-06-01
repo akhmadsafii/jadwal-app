@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Apotika",
-    short_name: "Apotika",
+    name: "BR PharmaShift",
+    short_name: "BR PharmaShift",
     description: "Aplikasi pengajuan dan pengelolaan jadwal shift kerja",
     start_url: "/login",
     scope: "/",

@@ -17,15 +17,15 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Apotika",
-    template: "%s | Apotika",
+    default: "BR PharmaShift",
+    template: "%s | BR PharmaShift",
   },
-  applicationName: "Apotika",
+  applicationName: "BR PharmaShift",
   description: "Aplikasi pengajuan dan pengelolaan jadwal shift kerja",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Apotika",
+    title: "BR PharmaShift",
     statusBarStyle: "black-translucent",
   },
   formatDetection: {
