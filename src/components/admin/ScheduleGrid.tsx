@@ -17,8 +17,15 @@ interface ScheduleGridProps {
   initialDate?: Date;
   initialSchedule?: Record<string, Record<string, ShiftType>>;
   requestLockedSchedule?: Record<string, Record<string, boolean>>;
+  requestScheduleMeta?: Record<string, Record<string, {
+    locked: boolean;
+    status: "PENDING" | "APPROVED";
+    requestId?: string;
+    type?: string;
+  }>>;
   onMonthChange?: (value: { month: number; year: number }) => void;
   onShiftChange?: (staffId: string, date: Date, shift: ShiftType) => void;
+  onUnlockRequest?: (staffId: string, date: Date) => void;
   onBulkShift?: (shift: ShiftType) => void;
 }
 
@@ -41,8 +48,10 @@ export default function ScheduleGrid({
   initialDate = new Date(),
   initialSchedule = {},
   requestLockedSchedule = {},
+  requestScheduleMeta = {},
   onMonthChange,
   onShiftChange,
+  onUnlockRequest,
   onBulkShift,
 }: ScheduleGridProps) {
   const [currentDate, setCurrentDate] = useState(initialDate);
@@ -50,7 +59,7 @@ export default function ScheduleGrid({
     staffId: string;
     date: Date;
   } | null>(null);
-  const [selectedShift, setSelectedShift] = useState<ShiftType>("PAGI");
+  const [selectedShift, setSelectedShift] = useState<ShiftType | null>(null);
   const [isPainting, setIsPainting] = useState(false);
   const [schedule, setSchedule] = useState<Record<string, Record<string, ShiftType>>>(
     initialSchedule
@@ -90,6 +99,7 @@ export default function ScheduleGrid({
   const applySelectedShift = (staffId: string, date: Date) => {
     if (requestLockedSchedule[staffId]?.[getDateKey(date)]) return;
     setSelectedCell({ staffId, date });
+    if (!selectedShift) return;
     updateShift(staffId, date, selectedShift);
   };
 
@@ -128,11 +138,12 @@ export default function ScheduleGrid({
   };
 
   const handleShiftToolSelect = (shift: ShiftType) => {
-    setSelectedShift(shift);
-    onBulkShift?.(shift);
+    setSelectedShift((current) => current === shift ? null : shift);
+    if (selectedShift !== shift) onBulkShift?.(shift);
   };
 
-  const fillRowWithShift = (staffId: string, shift: ShiftType) => {
+  const fillRowWithShift = (staffId: string, shift: ShiftType | null) => {
+    if (!shift) return;
     monthDays.forEach((date) => {
       if (requestLockedSchedule[staffId]?.[getDateKey(date)]) return;
       updateShift(staffId, date, shift);
@@ -152,6 +163,7 @@ export default function ScheduleGrid({
     const dateKey = getDateKey(date);
     const shift = schedule[staffId]?.[dateKey];
     const isLockedRequest = requestLockedSchedule[staffId]?.[dateKey];
+    const requestMeta = requestScheduleMeta[staffId]?.[dateKey];
     const isSelected =
       selectedCell?.staffId === staffId &&
       getDateKey(selectedCell.date) === dateKey;
@@ -160,6 +172,10 @@ export default function ScheduleGrid({
       "h-10 flex items-center justify-center text-label-sm font-bold rounded cursor-pointer transition-all border ";
     if (isLockedRequest) {
       return baseClass + "border-warning bg-warning/15 text-on-surface ring-2 ring-warning/70 cursor-not-allowed";
+    }
+    if (requestMeta?.status === "PENDING") {
+      baseClass += "border-secondary bg-secondary-container/60 text-on-secondary-container ring-1 ring-secondary/40 ";
+      return baseClass;
     }
     if (isSelected) {
       baseClass += gridCellActiveColor + " ";
@@ -211,6 +227,10 @@ export default function ScheduleGrid({
 
   const isRequestLocked = (staffId: string, date: Date) => {
     return Boolean(requestLockedSchedule[staffId]?.[getDateKey(date)]);
+  };
+
+  const getRequestMeta = (staffId: string, date: Date) => {
+    return requestScheduleMeta[staffId]?.[getDateKey(date)];
   };
 
   const formatMonthYear = (date: Date): string => {
@@ -267,8 +287,8 @@ export default function ScheduleGrid({
               onClick={() => handleShiftToolSelect(shift)}
               className={`px-3 py-1.5 text-label-sm font-bold rounded-full transition-all flex-shrink-0 ${
                 selectedShift === shift
-                  ? "bg-primary text-on-primary shadow-sm"
-                  : "bg-white border border-outline-variant hover:bg-surface-container"
+              ? "bg-primary text-on-primary shadow-sm"
+                : "bg-white border border-outline-variant hover:bg-surface-container"
               }`}
             >
               {shiftTypeLabelMap[shift]}
@@ -277,11 +297,21 @@ export default function ScheduleGrid({
         </div>
         <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-on-surface-variant">
               <span>
-                Mode cepat: klik atau drag sel untuk mengisi <b>{shiftTypeLabelMap[selectedShift]}</b>.
+                {selectedShift ? (
+                  <>
+                    Mode cepat: klik atau drag sel untuk mengisi <b>{shiftTypeLabelMap[selectedShift]}</b>.
+                  </>
+                ) : (
+                  <b>Pilih shift dulu sebelum klik atau drag sel.</b>
+                )}
               </span>
           <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-1 font-bold text-on-surface">
             <span className="h-2 w-2 rounded-full bg-warning" />
-            Dari request pegawai, dikunci
+            Approved request, dikunci
+          </span>
+          <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-secondary-container px-2 py-1 font-bold text-on-secondary-container">
+            <span className="h-2 w-2 rounded-full bg-secondary" />
+            Pending request, tampilan saran
           </span>
           {selectedCell && (
             <button
@@ -371,40 +401,69 @@ export default function ScheduleGrid({
                       <button
                         type="button"
                         onClick={() => fillRowWithShift(member.id, selectedShift)}
-                        className="ml-auto flex-shrink-0 h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-surface-container text-on-surface-variant hover:bg-primary hover:text-on-primary transition-colors"
-                        title={`Isi semua tanggal dengan ${shiftTypeLabelMap[selectedShift]}`}
+                        disabled={!selectedShift}
+                        className="ml-auto flex-shrink-0 h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-surface-container text-on-surface-variant hover:bg-primary hover:text-on-primary transition-colors disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-surface-container disabled:hover:text-on-surface-variant"
+                        title={selectedShift ? `Isi semua tanggal dengan ${shiftTypeLabelMap[selectedShift]}` : "Pilih shift dulu"}
                       >
                         <span className="material-symbols-outlined text-[16px] sm:text-[18px]">format_paint</span>
                       </button>
                     </div>
                   </td>
-                  {monthDays.map((day, dayIdx) => (
-                    <td
-                      key={dayIdx}
-                      className={`p-0 border-r border-outline-variant cursor-pointer ${
-                        isToday(day) ? "bg-primary/[0.02]" : holidays.has(getDateKey(day)) || day.getDay() === 0 ? "bg-error-container/10" : ""
-                      }`}
-                      title={holidays.get(getDateKey(day))?.name || ""}
-                    >
-                      <div
-                        data-staff-id={member.id}
-                        data-date-key={getDateKey(day)}
-                        onMouseDown={() => handleCellMouseDown(member.id, day)}
-                        onMouseEnter={() => handleCellMouseEnter(member.id, day)}
-                        onTouchStart={() => handleCellMouseDown(member.id, day)}
-                        onTouchMove={handleCellTouchMove}
-                        className={getCellClass(member.id, day)}
-                        title={isRequestLocked(member.id, day) ? "Dari pengajuan pegawai, tidak bisa diedit dari input admin" : ""}
+                  {monthDays.map((day, dayIdx) => {
+                    const requestMeta = getRequestMeta(member.id, day);
+                    const locked = isRequestLocked(member.id, day);
+                    return (
+                      <td
+                        key={dayIdx}
+                        className={`p-0 border-r border-outline-variant cursor-pointer ${
+                          isToday(day) ? "bg-primary/[0.02]" : holidays.has(getDateKey(day)) || day.getDay() === 0 ? "bg-error-container/10" : ""
+                        }`}
+                        title={holidays.get(getDateKey(day))?.name || ""}
                       >
-                        <span className="relative">
-                          {getCellContent(member.id, day) || "-"}
-                          {isRequestLocked(member.id, day) && (
-                            <span className="absolute -right-2 -top-2 h-2 w-2 rounded-full bg-warning" />
+                        <div
+                          data-staff-id={member.id}
+                          data-date-key={getDateKey(day)}
+                          onMouseDown={() => handleCellMouseDown(member.id, day)}
+                          onMouseEnter={() => handleCellMouseEnter(member.id, day)}
+                          onTouchStart={() => handleCellMouseDown(member.id, day)}
+                          onTouchMove={handleCellTouchMove}
+                          className={`${getCellClass(member.id, day)} relative group/cell`}
+                          title={
+                            locked
+                              ? "Approved request, dikunci. Klik ikon kunci untuk buka revisi."
+                              : requestMeta?.status === "PENDING"
+                                ? "Pending request pegawai, tampil sebagai saran jadwal"
+                                : ""
+                          }
+                        >
+                          <span className="relative">
+                            {getCellContent(member.id, day) || "-"}
+                            {locked && (
+                              <span className="absolute -right-2 -top-2 h-2 w-2 rounded-full bg-warning" />
+                            )}
+                            {requestMeta?.status === "PENDING" && (
+                              <span className="absolute -right-2 -top-2 h-2 w-2 rounded-full bg-secondary" />
+                            )}
+                          </span>
+                          {locked && onUnlockRequest && (
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onTouchStart={(event) => event.stopPropagation()}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onUnlockRequest(member.id, day);
+                              }}
+                              className="absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-warning shadow-sm opacity-100 sm:opacity-0 sm:group-hover/cell:opacity-100"
+                              title="Buka kunci request"
+                            >
+                              <span className="material-symbols-outlined text-[12px]">lock_open</span>
+                            </button>
                           )}
-                        </span>
-                      </div>
-                    </td>
-                  ))}
+                        </div>
+                      </td>
+                    );
+                  })}
                   {shiftOptions.map((shift) => (
                     <td
                       key={shift}

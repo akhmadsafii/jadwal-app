@@ -85,7 +85,7 @@ export default function ScheduleGrid({
 
   // Get first day of month to align correctly
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
-  const dayNamesStartIndex = firstDayOfMonth % 7; // 0=Sun in JS, convert to our index
+  const dayNamesStartIndex = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
   const visibleEmployees = employees ?? fetchedEmployees;
   const loading = isLoading || isFetching;
   const holidays = useIndonesiaHolidays(year);

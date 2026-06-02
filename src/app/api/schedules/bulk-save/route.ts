@@ -47,19 +47,25 @@ export async function POST(request: Request) {
 
     const approvedRequests = await prisma.shiftRequest.findMany({
       where: {
-        userId: { in: userIds },
         status: "APPROVED",
         type: {
-          in: ["SHIFT_PAGI", "SHIFT_MIDDLE", "SHIFT_SIANG", "SHIFT_MALAM", "CUTI_TAHUNAN", "CUTI_SAKIT", "LIBUR"],
+          in: ["SHIFT_PAGI", "SHIFT_MIDDLE", "SHIFT_SIANG", "SHIFT_MALAM", "CUTI_TAHUNAN", "CUTI_SAKIT", "LIBUR", "TUKAR_SHIFT"],
         },
-        startDate: { lte: maxDate },
         OR: [
-          { endDate: null },
-          { endDate: { gte: minDate } },
+          { userId: { in: userIds } },
+          { swapWithUserId: { in: userIds } },
         ],
+        startDate: { lte: maxDate },
+        AND: [{
+          OR: [
+            { endDate: null },
+            { endDate: { gte: minDate } },
+          ],
+        }],
       },
       select: {
         userId: true,
+        swapWithUserId: true,
         startDate: true,
         endDate: true,
       },
@@ -72,6 +78,9 @@ export async function POST(request: Request) {
       end.setHours(0, 0, 0, 0);
       for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
         requestedDates.add(`${request.userId}-${toDateKey(date)}`);
+        if (request.swapWithUserId) {
+          requestedDates.add(`${request.swapWithUserId}-${toDateKey(date)}`);
+        }
       }
     });
 

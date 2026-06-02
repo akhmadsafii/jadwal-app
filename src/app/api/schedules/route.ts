@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const month = searchParams.get("month");
     const year = searchParams.get("year");
     const userId = searchParams.get("userId");
+    const includePendingRequests = searchParams.get("includePendingRequests") === "1";
 
     const now = new Date();
     const targetMonth = month ? parseInt(month) : now.getMonth() + 1;
@@ -35,8 +36,11 @@ export async function GET(request: Request) {
       // Get approved requests for this user
       const approvedRequests = await prisma.shiftRequest.findMany({
         where: {
-          userId,
           status: "APPROVED",
+          OR: [
+            { userId },
+            { swapWithUserId: userId },
+          ],
           startDate: {
             gte: new Date(targetYear, targetMonth - 1, 1),
             lt: new Date(targetYear, targetMonth, 1),
@@ -56,12 +60,17 @@ export async function GET(request: Request) {
       };
 
       const requestDates = new Map<string, string>();
+      const lockedRequestDates = new Set<string>();
       approvedRequests.forEach((req) => {
         const start = new Date(req.startDate);
         const end = req.endDate ? new Date(req.endDate) : start;
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateKey = toDateKey(new Date(d));
+          if (req.userId === userId || req.swapWithUserId === userId) {
+            lockedRequestDates.add(dateKey);
+          }
           const shiftType = requestTypeToShiftType[req.type];
-          if (shiftType) requestDates.set(toDateKey(new Date(d)), shiftType);
+          if (shiftType && req.userId === userId) requestDates.set(dateKey, shiftType);
         }
       });
 
@@ -75,7 +84,7 @@ export async function GET(request: Request) {
           date: s.date,
           dateKey,
           shiftType: s.shiftType,
-          fromRequest: requestDates.has(dateKey),
+          fromRequest: lockedRequestDates.has(dateKey),
         });
       });
 
@@ -138,6 +147,25 @@ export async function GET(request: Request) {
       },
     });
 
+    const employeeIds = employees.map((employee) => employee.id);
+    const visibleRequestStatuses: ("APPROVED" | "PENDING")[] = includePendingRequests
+      ? ["APPROVED", "PENDING"]
+      : ["APPROVED"];
+
+    const approvedRequests = await prisma.shiftRequest.findMany({
+      where: {
+        status: { in: visibleRequestStatuses },
+        startDate: {
+          gte: new Date(targetYear, targetMonth - 1, 1),
+          lt: new Date(targetYear, targetMonth, 1),
+        },
+        OR: [
+          { userId: { in: employeeIds } },
+          { swapWithUserId: { in: employeeIds } },
+        ],
+      },
+    });
+
     // Get monthly stats
     const monthlyStats = await prisma.monthlyStats.findFirst({
       where: { month: targetMonth, year: targetYear },
@@ -178,15 +206,34 @@ export async function GET(request: Request) {
       success: true,
       employees: employees.map((emp) => {
         // Combine schedule assignments with request-based shifts
-        const scheduleEntries: { date: Date; dateKey: string; shiftType: string; fromRequest: boolean }[] = [];
+        const scheduleEntries: {
+          date: Date;
+          dateKey: string;
+          shiftType: string;
+          fromRequest: boolean;
+          requestStatus?: string;
+          requestId?: string;
+          requestType?: string;
+        }[] = [];
         const requestDates = new Map<string, string>();
+        const requestMeta = new Map<string, { requestId: string; requestStatus: string; requestType: string }>();
+        const lockedRequestDates = new Set<string>();
 
-        emp.shiftRequests.forEach((req) => {
+        approvedRequests
+          .filter((req) => req.userId === emp.id || req.swapWithUserId === emp.id)
+          .forEach((req) => {
           const start = new Date(req.startDate);
           const end = req.endDate ? new Date(req.endDate) : start;
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateKey = toDateKey(new Date(d));
+            if (req.status === "APPROVED") lockedRequestDates.add(dateKey);
+            requestMeta.set(dateKey, {
+              requestId: req.id,
+              requestStatus: req.status,
+              requestType: req.type,
+            });
             const shiftType = requestTypeToShiftType[req.type];
-            if (shiftType) requestDates.set(toDateKey(new Date(d)), shiftType);
+            if (shiftType && req.userId === emp.id) requestDates.set(dateKey, shiftType);
           }
         });
 
@@ -196,14 +243,19 @@ export async function GET(request: Request) {
           scheduleEntries.push({
             date: s.date,
             dateKey,
-            shiftType: s.shiftType,
-            fromRequest: requestDates.has(dateKey),
+            shiftType: requestDates.get(dateKey) || s.shiftType,
+            fromRequest: requestMeta.has(dateKey),
+            requestStatus: requestMeta.get(dateKey)?.requestStatus,
+            requestId: requestMeta.get(dateKey)?.requestId,
+            requestType: requestMeta.get(dateKey)?.requestType,
           });
         });
 
         // Add approved request shifts (only if not already in schedule)
         const existingDates = new Set(emp.shiftAssignments.map((s) => toDateKey(s.date)));
-        emp.shiftRequests.forEach((req) => {
+        approvedRequests
+          .filter((req) => req.userId === emp.id)
+          .forEach((req) => {
           const start = new Date(req.startDate);
           const end = req.endDate ? new Date(req.endDate) : start;
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -216,6 +268,9 @@ export async function GET(request: Request) {
                   dateKey,
                   shiftType,
                   fromRequest: true,
+                  requestStatus: requestMeta.get(dateKey)?.requestStatus,
+                  requestId: requestMeta.get(dateKey)?.requestId,
+                  requestType: requestMeta.get(dateKey)?.requestType,
                 });
               }
             }

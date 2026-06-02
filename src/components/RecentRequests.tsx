@@ -93,6 +93,7 @@ export default function RecentRequests() {
                 {request.endDate
                   ? `${startDate} - ${endDate}`
                   : startDate}
+                {request.swapWithUser?.name ? ` dengan ${request.swapWithUser.name}` : ""}
               </p>
             </div>
             <span

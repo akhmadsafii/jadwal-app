@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { swapShiftAssignments } from "@/lib/swapShiftAssignments";
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -33,6 +34,15 @@ export async function PUT(request: Request) {
     }
 
     const updatedRequest = await prisma.$transaction(async (tx) => {
+      const existing = await tx.shiftRequest.findUnique({
+        where: { id: requestId },
+        select: { status: true },
+      });
+
+      if (!existing) {
+        throw new Error("Request not found");
+      }
+
       const updated = await tx.shiftRequest.update({
         where: { id: requestId },
         data: {
@@ -49,8 +59,19 @@ export async function PUT(request: Request) {
         },
       });
 
+      const isNewApproval = status === "APPROVED" && existing.status !== "APPROVED";
+
+      if (isNewApproval && updated.type === "TUKAR_SHIFT" && updated.swapWithUserId) {
+        await swapShiftAssignments(
+          tx,
+          updated.userId,
+          updated.swapWithUserId,
+          toStartOfDay(updated.startDate)
+        );
+      }
+
       const shiftType = requestTypeToShiftType[updated.type];
-      if (status === "APPROVED" && shiftType) {
+      if (isNewApproval && updated.type !== "TUKAR_SHIFT" && shiftType) {
         const startDate = toStartOfDay(updated.startDate);
         const endDate = toStartOfDay(updated.endDate || updated.startDate);
 

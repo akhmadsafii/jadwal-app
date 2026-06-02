@@ -33,9 +33,33 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
     });
 
+    const swapUserIds = [
+      ...new Set(
+        requests
+          .map((request) => request.swapWithUserId)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const swapUsers = swapUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: swapUserIds } },
+          select: {
+            id: true,
+            name: true,
+            nip: true,
+            position: true,
+            avatarUrl: true,
+          },
+        })
+      : [];
+    const swapUserMap = new Map(swapUsers.map((user) => [user.id, user]));
+
     return NextResponse.json({
       success: true,
-      requests,
+      requests: requests.map((request) => ({
+        ...request,
+        swapWithUser: request.swapWithUserId ? swapUserMap.get(request.swapWithUserId) || null : null,
+      })),
     });
   } catch (error) {
     console.error("Get requests error:", error);

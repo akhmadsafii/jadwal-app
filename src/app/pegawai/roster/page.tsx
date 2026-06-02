@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import EmployeeTopBar from "@/components/pegawai/EmployeeTopBar";
 import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import { useAuth } from "@/lib/authContext";
@@ -31,6 +31,13 @@ interface ShiftRequest {
   endDate?: string | null;
   description?: string | null;
   status: RequestStatus;
+}
+
+interface EmployeeOption {
+  id: string;
+  name: string;
+  nip: string;
+  isActive?: boolean;
 }
 
 const monthNames = [
@@ -226,10 +233,12 @@ export default function PegawaiRosterPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [schedule, setSchedule] = useState<ShiftAssignment[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterKey>("ALL");
   const [selectedDay, setSelectedDay] = useState<DaySchedule | null>(null);
   const [requestType, setRequestType] = useState<RequestType>("CUTI_TAHUNAN");
+  const [swapWithUserId, setSwapWithUserId] = useState("");
   const [requestDescription, setRequestDescription] = useState("");
   const [submitStatus, setSubmitStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
 
@@ -263,6 +272,7 @@ export default function PegawaiRosterPage() {
   const nextWorkShift = days.find((day) => day.dateKey >= todayKey && isWorkShift(day.shiftType));
   const selectedRequest = selectedDay ? getRequestForDay(requests, selectedDay.dateKey) : undefined;
   const selectedRequestLocked = selectedRequest?.status === "PENDING" || selectedRequest?.status === "APPROVED";
+  const isSwapRequest = requestType === "TUKAR_SHIFT";
 
   const summary = useMemo(() => {
     return days.reduce(
@@ -310,6 +320,46 @@ export default function PegawaiRosterPage() {
     }
   };
 
+  const fetchSchedule = useCallback(async () => {
+    if (!user?.id || !token) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        `/api/schedules?userId=${user.id}&month=${month}&year=${year}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setSchedule(data.schedule || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch schedule:", error);
+      setSchedule([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [month, token, user?.id, year]);
+
+  const fetchEmployees = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      const response = await fetch("/api/users?role=EMPLOYEE");
+      if (!response.ok) return;
+      const data = await response.json();
+      const users = (data.users || []).filter((employee: EmployeeOption) => (
+        employee.id !== user.id && employee.isActive !== false
+      ));
+      setEmployees(users);
+      setSwapWithUserId((current) => current || users[0]?.id || "");
+    } catch (error) {
+      console.error("Failed to fetch employee options:", error);
+      setEmployees([]);
+    }
+  }, [user?.id]);
+
   const openRequestSheet = (day: DaySchedule) => {
     const defaultTypeByShift: Partial<Record<ShiftType, RequestType>> = {
       PAGI: "SHIFT_PAGI",
@@ -321,6 +371,7 @@ export default function PegawaiRosterPage() {
     const defaultType = defaultTypeByShift[day.shiftType] || "CUTI_TAHUNAN";
     setSelectedDay(day);
     setRequestType(defaultType);
+    setSwapWithUserId((current) => current || employees[0]?.id || "");
     setRequestDescription("");
     setSubmitStatus("idle");
   };
@@ -337,6 +388,20 @@ export default function PegawaiRosterPage() {
       return;
     }
 
+    if (isSwapRequest && !swapWithUserId) {
+      setSubmitStatus("error");
+      return;
+    }
+
+    const swapTarget = employees.find((employee) => employee.id === swapWithUserId);
+    const confirmed = confirm(
+      isSwapRequest
+        ? `Tukar shift tanggal ${formatFullDate(selectedDay.date)} dengan ${swapTarget?.name || "karyawan tujuan"}? Jadwal akan langsung berubah.`
+        : `Kirim pengajuan ${requestTypeLabels[requestType]} untuk tanggal ${formatFullDate(selectedDay.date)}?`
+    );
+
+    if (!confirmed) return;
+
     setSubmitStatus("submitting");
 
     try {
@@ -348,6 +413,7 @@ export default function PegawaiRosterPage() {
           type: requestType,
           startDate: selectedDay.dateKey,
           endDate: selectedDay.dateKey,
+          swapWithUserId: isSwapRequest ? swapWithUserId : undefined,
           description: requestDescription || `Pengajuan dari jadwal tanggal ${formatFullDate(selectedDay.date)}`,
         }),
       });
@@ -359,6 +425,7 @@ export default function PegawaiRosterPage() {
 
       setSubmitStatus("success");
       await fetchRequests();
+      await fetchSchedule();
       setTimeout(() => {
         setSelectedDay(null);
         setSubmitStatus("idle");
@@ -370,34 +437,16 @@ export default function PegawaiRosterPage() {
   };
 
   useEffect(() => {
-    const fetchSchedule = async () => {
-      if (!user?.id || !token) return;
-
-      setIsLoading(true);
-      try {
-        const response = await fetch(
-          `/api/schedules?userId=${user.id}&month=${month}&year=${year}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          setSchedule(data.schedule || []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch schedule:", error);
-        setSchedule([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchSchedule();
-  }, [user?.id, token, month, year]);
+  }, [fetchSchedule]);
 
   useEffect(() => {
     fetchRequests();
   }, [user?.id, token]);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   return (
     <div className="min-h-screen pb-[132px] bg-background">
@@ -642,6 +691,34 @@ export default function PegawaiRosterPage() {
                 </div>
               </label>
 
+              {isSwapRequest && (
+                <label className="block">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant">Tukar dengan karyawan</span>
+                  <div className="relative mt-1">
+                    <select
+                      value={swapWithUserId}
+                      onChange={(event) => setSwapWithUserId(event.target.value)}
+                      className="w-full h-11 rounded-lg border border-outline-variant bg-surface px-3 pr-10 text-sm font-medium outline-none focus:border-primary"
+                      disabled={submitStatus === "submitting"}
+                    >
+                      {employees.length === 0 ? (
+                        <option value="">Tidak ada karyawan tersedia</option>
+                      ) : employees.map((employee) => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.name} - {employee.nip}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-outline pointer-events-none">
+                      expand_more
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-on-surface-variant">
+                    Jadwal pada tanggal ini akan langsung ditukar dengan karyawan tujuan.
+                  </p>
+                </label>
+              )}
+
               <label className="block">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant">Keterangan</span>
                 <textarea
@@ -667,12 +744,14 @@ export default function PegawaiRosterPage() {
                 }`}
               >
                 {submitStatus === "submitting"
-                  ? "Mengirim..."
+                  ? (isSwapRequest ? "Memproses tukar..." : "Mengirim...")
                   : submitStatus === "success"
-                    ? "Pengajuan terkirim"
+                    ? (isSwapRequest ? "Shift berhasil ditukar" : "Pengajuan terkirim")
                     : submitStatus === "error"
                       ? "Gagal, coba lagi"
-                      : "Kirim Pengajuan"}
+                      : isSwapRequest
+                        ? "Tukar Shift Sekarang"
+                        : "Kirim Pengajuan"}
               </button>
             </div>
             )}

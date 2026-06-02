@@ -17,6 +17,13 @@ interface AdminStaff {
   shift: ShiftType;
 }
 
+interface RequestScheduleMeta {
+  locked: boolean;
+  status: "PENDING" | "APPROVED";
+  requestId?: string;
+  type?: string;
+}
+
 function getDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -33,6 +40,7 @@ export default function AdminSchedulePage() {
   const [staff, setStaff] = useState<AdminStaff[]>([]);
   const [initialSchedule, setInitialSchedule] = useState<Record<string, Record<string, ShiftType>>>({});
   const [requestLockedSchedule, setRequestLockedSchedule] = useState<Record<string, Record<string, boolean>>>({});
+  const [requestScheduleMeta, setRequestScheduleMeta] = useState<Record<string, Record<string, RequestScheduleMeta>>>({});
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
@@ -64,7 +72,7 @@ export default function AdminSchedulePage() {
         const employees = usersData.users || [];
         setStaff(employees.map((employee: any) => toAdminStaff(employee)));
 
-        const scheduleResponse = await fetch(`/api/schedules?month=${currentMonth.month}&year=${currentMonth.year}`);
+        const scheduleResponse = await fetch(`/api/schedules?month=${currentMonth.month}&year=${currentMonth.year}&includePendingRequests=1`);
 
         if (!scheduleResponse.ok) {
           return;
@@ -73,14 +81,25 @@ export default function AdminSchedulePage() {
         const data = await scheduleResponse.json();
         const loadedSchedule: Record<string, Record<string, ShiftType>> = {};
         const lockedSchedule: Record<string, Record<string, boolean>> = {};
+        const requestMeta: Record<string, Record<string, RequestScheduleMeta>> = {};
         (data.employees || []).forEach((employee: any) => {
           loadedSchedule[employee.id] = {};
           lockedSchedule[employee.id] = {};
+          requestMeta[employee.id] = {};
           employee.schedule?.forEach((assignment: any) => {
             const dateKey = assignment.dateKey || assignment.date.split("T")[0];
             loadedSchedule[employee.id][dateKey] = assignment.shiftType;
             if (assignment.fromRequest) {
-              lockedSchedule[employee.id][dateKey] = true;
+              const isApproved = assignment.requestStatus === "APPROVED";
+              requestMeta[employee.id][dateKey] = {
+                locked: isApproved,
+                status: isApproved ? "APPROVED" : "PENDING",
+                requestId: assignment.requestId,
+                type: assignment.requestType,
+              };
+              if (isApproved) {
+                lockedSchedule[employee.id][dateKey] = true;
+              }
             }
           });
         });
@@ -91,6 +110,7 @@ export default function AdminSchedulePage() {
         setInitialSchedule(loadedSchedule);
         setSchedule(loadedSchedule);
         setRequestLockedSchedule(lockedSchedule);
+        setRequestScheduleMeta(requestMeta);
       } catch (error) {
         console.error("Failed to load admin schedule data:", error);
         setLoadError("Data pegawai belum bisa dimuat. Pastikan tabel User sudah berisi pegawai.");
@@ -178,6 +198,41 @@ export default function AdminSchedulePage() {
     }
   };
 
+  const handleUnlockRequest = async (staffId: string, date: Date) => {
+    const dateKey = getDateKey(date);
+    const meta = requestScheduleMeta[staffId]?.[dateKey];
+    if (!meta?.requestId) return;
+
+    const confirmed = confirm("Buka kunci request ini? Status request akan ditandai ditolak agar jadwal bisa direvisi admin.");
+    if (!confirmed) return;
+
+    const response = await fetch("/api/requests/update", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requestId: meta.requestId,
+        status: "REJECTED",
+        adminNotes: "Kunci request dibuka untuk revisi jadwal admin.",
+      }),
+    });
+
+    if (!response.ok) {
+      alert("Gagal membuka kunci request.");
+      return;
+    }
+
+    setRequestLockedSchedule((prev) => {
+      const next = { ...prev, [staffId]: { ...(prev[staffId] || {}) } };
+      delete next[staffId][dateKey];
+      return next;
+    });
+    setRequestScheduleMeta((prev) => {
+      const next = { ...prev, [staffId]: { ...(prev[staffId] || {}) } };
+      delete next[staffId][dateKey];
+      return next;
+    });
+  };
+
   const handlePublishSuccess = () => {
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
@@ -213,8 +268,10 @@ export default function AdminSchedulePage() {
               initialDate={new Date(currentMonth.year, currentMonth.month - 1, 1)}
               initialSchedule={initialSchedule}
               requestLockedSchedule={requestLockedSchedule}
+              requestScheduleMeta={requestScheduleMeta}
               onMonthChange={setCurrentMonth}
               onShiftChange={handleShiftChange}
+              onUnlockRequest={handleUnlockRequest}
             />
             <SaveActions
               schedule={schedule}

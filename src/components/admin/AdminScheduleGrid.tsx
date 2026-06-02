@@ -66,7 +66,7 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
   const year = selectedMonth.year;
   const actualDaysInMonth = getDaysInMonth(year, month);
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
-  const dayNamesStartIndex = firstDayOfMonth % 7;
+  const dayNamesStartIndex = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
   const holidays = useIndonesiaHolidays(year);
 
   // Create a map of schedules for quick lookup

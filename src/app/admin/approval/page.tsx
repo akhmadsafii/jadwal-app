@@ -26,6 +26,9 @@ export default function ApprovalPage() {
       month: "short",
       year: "numeric",
     });
+    const description = request.type === "TUKAR_SHIFT"
+      ? `Tukar shift dengan ${request.swapWithUser?.name || "karyawan tujuan"}`
+      : request.description || request.type.replaceAll("_", " ");
 
     return {
       id: request.id,
@@ -33,7 +36,7 @@ export default function ApprovalPage() {
       requesterId: request.user?.nip || "-",
       avatarUrl: request.user?.avatarUrl || "",
       category: categoryByType[request.type] || "TIME_OFF",
-      description: request.description || request.type.replaceAll("_", " "),
+      description,
       date,
       status: request.status,
     };

@@ -49,6 +49,7 @@ model ShiftRequest {
   type        RequestType
   startDate   DateTime
   endDate     DateTime?
+  swapWithUserId String?
   description String?
   status      RequestStatus   @default(PENDING)
   adminNotes  String?
