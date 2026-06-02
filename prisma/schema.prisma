@@ -94,6 +94,7 @@ enum ShiftType {
   MALAM     // Malam: 21:00 - 07:00
   LIBUR     // Libur
   CUTI      // Cuti
+  SAKIT     // Cuti sakit / izin
   TURUN     // Turun Jaga
 }
 

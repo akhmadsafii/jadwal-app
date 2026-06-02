@@ -17,6 +17,11 @@ interface UserItem {
   avatarUrl?: string | null;
   isActive: boolean;
   sortOrder: number;
+  leaveBalance?: {
+    annualLeave: number;
+    sickLeave: number;
+    compensation: number;
+  } | null;
 }
 
 interface UserFormState {
@@ -53,6 +58,10 @@ export default function AdminUsersPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [balanceUser, setBalanceUser] = useState<UserItem | null>(null);
+  const [balanceForm, setBalanceForm] = useState({ annualLeave: 0 });
+  const [isBalanceSaving, setIsBalanceSaving] = useState(false);
+  const [balanceMessage, setBalanceMessage] = useState("");
 
   const filteredUsers = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -117,6 +126,45 @@ export default function AdminUsersPage() {
     });
     setMessage("");
     setIsFormOpen(true);
+  };
+
+  const openBalanceForm = (user: UserItem) => {
+    setBalanceUser(user);
+    setBalanceForm({
+      annualLeave: user.leaveBalance?.annualLeave ?? 12,
+    });
+    setBalanceMessage("");
+  };
+
+  const saveBalance = async () => {
+    if (!balanceUser) return;
+    setIsBalanceSaving(true);
+    setBalanceMessage("");
+
+    try {
+      const response = await fetch(`/api/users/${balanceUser.id}/balance`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(balanceForm),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setBalanceMessage(data.error || "Saldo cuti gagal disimpan");
+        return;
+      }
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === balanceUser.id ? { ...user, leaveBalance: data.balance } : user
+        )
+      );
+      setBalanceUser(null);
+    } catch {
+      setBalanceMessage("Terjadi kesalahan koneksi");
+    } finally {
+      setIsBalanceSaving(false);
+    }
   };
 
   const saveUser = async () => {
@@ -279,9 +327,27 @@ export default function AdminUsersPage() {
                     )}
                   </div>
                   <p className="text-xs text-on-surface-variant truncate">{user.position || "-"}</p>
-                  <p className="text-[10px] text-outline">NIP. {user.nip}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <p className="text-[10px] text-outline">NIP. {user.nip}</p>
+                    {user.role === "EMPLOYEE" && (
+                      <span className="rounded bg-surface-container px-2 py-0.5 text-[10px] font-bold text-primary">
+                        Cuti {user.leaveBalance?.annualLeave ?? 0}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  {user.role === "EMPLOYEE" && (
+                    <button
+                      type="button"
+                      onClick={() => openBalanceForm(user)}
+                      className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-primary"
+                      aria-label="Edit saldo cuti"
+                      title="Edit saldo cuti"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">event_available</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => toggleActive(user)}
@@ -411,6 +477,74 @@ export default function AdminUsersPage() {
                 className="w-full h-12 rounded-xl bg-primary text-on-primary font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
               >
                 {isSaving ? "Menyimpan..." : "Simpan User"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {balanceUser && (
+        <div className="fixed inset-0 z-[110] bg-black/40 flex items-end sm:items-center justify-center">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setBalanceUser(null)}
+            aria-label="Tutup saldo cuti"
+          />
+          <section className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-surface-container-lowest border border-outline-variant p-4 shadow-xl">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-outline">Saldo Cuti</p>
+                <h2 className="text-lg font-bold text-on-surface">{balanceUser.name}</h2>
+                <p className="text-xs text-on-surface-variant">Atur saldo yang akan dipakai sistem.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBalanceUser(null)}
+                className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center"
+                aria-label="Tutup"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            {balanceMessage && (
+              <div className="mb-3 rounded-lg bg-error-container border border-error/20 p-3 text-sm text-on-error-container">
+                {balanceMessage}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-[10px] uppercase text-on-surface-variant">Cuti Tahunan</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={balanceForm.annualLeave}
+                  onChange={(e) => setBalanceForm({ ...balanceForm, annualLeave: parseInt(e.target.value) || 0 })}
+                  className="mt-1 w-full h-10 rounded-lg border border-outline-variant bg-surface px-3 text-sm outline-none focus:border-primary"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-surface-container p-3">
+                  <p className="text-[10px] uppercase text-on-surface-variant">Izin / Sakit</p>
+                  <p className="mt-1 text-sm font-bold text-on-surface">Tidak memakai saldo</p>
+                </div>
+                <div className="rounded-lg bg-surface-container p-3">
+                  <p className="text-[10px] uppercase text-on-surface-variant">Kompensasi</p>
+                  <p className="mt-1 text-sm font-bold text-on-surface">Tidak dibatasi</p>
+                </div>
+              </div>
+              <p className="rounded-lg bg-secondary-container p-3 text-xs text-on-secondary-container">
+                Saat jadwal dipublish dan shift pegawai berubah menjadi CUTI, saldo cuti tahunan akan berkurang otomatis. Jika CUTI dihapus, saldo dikembalikan.
+              </p>
+              <button
+                type="button"
+                onClick={saveBalance}
+                disabled={isBalanceSaving}
+                className="w-full h-12 rounded-xl bg-primary text-on-primary font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
+              >
+                {isBalanceSaving ? "Menyimpan..." : "Simpan Saldo Cuti"}
               </button>
             </div>
           </section>

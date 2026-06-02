@@ -5,14 +5,14 @@ export type EmployeeShiftType =
   | "SHIFT_SIANG"     // Siang: 14:00 - 21:00
   | "SHIFT_MALAM"     // Malam: 21:00 - 07:00
   | "CUTI_TAHUNAN"    // Cuti Tahunan
-  | "CUTI_SAKIT"      // Cuti Sakit
+  | "CUTI_SAKIT"      // Izin / Sakit
   | "LIBUR"           // Ajukan Libur (bukan cuti)
   | "TUKAR_SHIFT";    // Tukar Shift
 
 export type EmployeeRequestStatus = "pending" | "approved" | "expired" | "rejected";
 
 export interface EmployeeLeaveBalance {
-  type: "Cuti Tahunan" | "Cuti Sakit" | "Kompensasi";
+  type: "Cuti Tahunan";
   days: number;
   color: string;
 }
@@ -41,7 +41,7 @@ export const shiftTimeRanges: Record<EmployeeShiftType, string> = {
   SHIFT_SIANG: "14:00 — 21:00",
   SHIFT_MALAM: "21:00 — 07:00",
   CUTI_TAHUNAN: "Libur",
-  CUTI_SAKIT: "Libur",
+  CUTI_SAKIT: "Izin / sakit",
   LIBUR: "Libur",
   TUKAR_SHIFT: "-",
 };
@@ -53,7 +53,7 @@ export const shiftCodes: Record<EmployeeShiftType, string> = {
   SHIFT_SIANG: "S",
   SHIFT_MALAM: "M",
   CUTI_TAHUNAN: "L",
-  CUTI_SAKIT: "L",
+  CUTI_SAKIT: "CS",
   LIBUR: "L",
   TUKAR_SHIFT: "-",
 };
@@ -70,8 +70,6 @@ export const employeeProfile: EmployeeProfile = {
 // Leave Balance
 export const employeeLeaveBalances: EmployeeLeaveBalance[] = [
   { type: "Cuti Tahunan", days: 12, color: "text-primary" },
-  { type: "Cuti Sakit", days: 5, color: "text-tertiary" },
-  { type: "Kompensasi", days: 2, color: "text-secondary" },
 ];
 
 // Recent Requests
@@ -109,7 +107,7 @@ export const employeeRequestTypeLabels: Record<EmployeeShiftType, string> = {
   SHIFT_SIANG: "Shift Siang (14-21)",
   SHIFT_MALAM: "Shift Malam (21-07)",
   CUTI_TAHUNAN: "Cuti Tahunan",
-  CUTI_SAKIT: "Cuti Sakit",
+  CUTI_SAKIT: "Izin / Sakit",
   LIBUR: "Ajukan Libur",
   TUKAR_SHIFT: "Tukar Shift",
 };
@@ -150,7 +148,7 @@ export const employeeRequestTypeOptions = [
   { value: "SHIFT_MALAM", label: "Shift Malam (21-07)" },
   { value: "LIBUR", label: "Ajukan Libur (bukan cuti)" },
   { value: "CUTI_TAHUNAN", label: "Cuti Tahunan" },
-  { value: "CUTI_SAKIT", label: "Cuti Sakit" },
+  { value: "CUTI_SAKIT", label: "Izin / Sakit" },
   { value: "TUKAR_SHIFT", label: "Tukar Shift" },
 ];
 

@@ -32,6 +32,7 @@ const shiftTypeToCode: Record<string, string> = {
   MALAM: "M",
   LIBUR: "L",
   CUTI: "C",
+  SAKIT: "CS",
   TURUN: "X",
 };
 
@@ -43,6 +44,7 @@ const totalColumns = [
   { code: "L", label: "L" },
   { code: "X", label: "X" },
   { code: "C", label: "C" },
+  { code: "CS", label: "CS" },
 ];
 
 const legendRows = [
@@ -52,6 +54,7 @@ const legendRows = [
   ["M", "Malam 21:00 - 07:00"],
   ["L", "Libur"],
   ["C", "Cuti"],
+  ["CS", "Cuti Sakit / Izin"],
   ["X", "Turun Jaga"],
 ];
 

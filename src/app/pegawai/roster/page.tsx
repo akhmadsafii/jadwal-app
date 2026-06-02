@@ -6,7 +6,7 @@ import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import { useAuth } from "@/lib/authContext";
 import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
 
-type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
+type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 type FilterKey = "ALL" | "WORK" | "OFF" | "NIGHT";
 type RequestType = "SHIFT_PAGI" | "SHIFT_MIDDLE" | "SHIFT_SIANG" | "SHIFT_MALAM" | "CUTI_TAHUNAN" | "CUTI_SAKIT" | "TUKAR_SHIFT";
 type RequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
@@ -108,6 +108,15 @@ const shiftMeta: Record<ShiftType, {
     surface: "bg-primary/10 text-primary",
     border: "border-primary/20",
   },
+  SAKIT: {
+    code: "CS",
+    label: "Cuti Sakit",
+    time: "Izin / sakit",
+    icon: "medical_services",
+    pill: "bg-error text-on-error",
+    surface: "bg-error-container text-on-error-container",
+    border: "border-error/20",
+  },
   TURUN: {
     code: "X",
     label: "Turun Jaga",
@@ -132,7 +141,7 @@ const requestTypeOptions: { value: RequestType; label: string }[] = [
   { value: "SHIFT_SIANG", label: "Shift Siang (14:00 - 21:00)" },
   { value: "SHIFT_MALAM", label: "Shift Malam (21:00 - 07:00)" },
   { value: "CUTI_TAHUNAN", label: "Ajukan Cuti" },
-  { value: "CUTI_SAKIT", label: "Cuti Sakit" },
+  { value: "CUTI_SAKIT", label: "Izin / Sakit" },
   { value: "TUKAR_SHIFT", label: "Tukar Shift" },
 ];
 
@@ -142,7 +151,7 @@ const requestTypeLabels: Record<RequestType, string> = {
   SHIFT_SIANG: "Shift Siang",
   SHIFT_MALAM: "Shift Malam",
   CUTI_TAHUNAN: "Cuti Tahunan",
-  CUTI_SAKIT: "Cuti Sakit",
+  CUTI_SAKIT: "Izin / Sakit",
   TUKAR_SHIFT: "Tukar Shift",
 };
 
@@ -207,7 +216,7 @@ function formatFullDate(date: Date) {
 }
 
 function isWorkShift(shiftType: ShiftType) {
-  return !["LIBUR", "CUTI", "TURUN"].includes(shiftType);
+  return !["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(shiftType);
 }
 
 function getRequestForDay(requests: ShiftRequest[], dateKey: string) {
@@ -289,7 +298,7 @@ export default function PegawaiRosterPage() {
 
   const filteredDays = days.filter((day) => {
     if (activeFilter === "WORK") return isWorkShift(day.shiftType);
-    if (activeFilter === "OFF") return ["LIBUR", "CUTI", "TURUN"].includes(day.shiftType);
+    if (activeFilter === "OFF") return ["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(day.shiftType);
     if (activeFilter === "NIGHT") return day.shiftType === "MALAM";
     return true;
   });

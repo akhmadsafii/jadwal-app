@@ -9,7 +9,7 @@ const requestTypeOptions = [
   { value: "SHIFT_SIANG", label: "Shift Siang (14-21)" },
   { value: "SHIFT_MALAM", label: "Shift Malam (21-07)" },
   { value: "CUTI_TAHUNAN", label: "Cuti Tahunan" },
-  { value: "CUTI_SAKIT", label: "Cuti Sakit" },
+  { value: "CUTI_SAKIT", label: "Izin / Sakit" },
   { value: "TUKAR_SHIFT", label: "Tukar Shift" },
 ];
 

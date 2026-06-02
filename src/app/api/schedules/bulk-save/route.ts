@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
+type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 
 interface ScheduleItem {
   userId: string;
@@ -19,6 +19,10 @@ function toDateKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getScheduleKey(userId: string, dateKey: string) {
+  return `${userId}-${dateKey}`;
 }
 
 export async function POST(request: Request) {
@@ -88,13 +92,69 @@ export async function POST(request: Request) {
       return !requestedDates.has(`${item.userId}-${item.date}`);
     });
 
-    // Perform bulk upsert
-    const results = await Promise.all(
-      editableSchedules.map(async (item) => {
+    const existingAssignments = await prisma.shiftAssignment.findMany({
+      where: {
+        userId: { in: userIds },
+        date: {
+          gte: minDate,
+          lte: maxDate,
+        },
+      },
+      select: {
+        userId: true,
+        date: true,
+        shiftType: true,
+      },
+    });
+
+    const existingMap = new Map(
+      existingAssignments.map((assignment) => [
+        getScheduleKey(assignment.userId, toDateKey(assignment.date)),
+        assignment.shiftType,
+      ])
+    );
+
+    const leaveDeltaByUser = new Map<string, number>();
+    editableSchedules.forEach((item) => {
+      const previousShift = existingMap.get(getScheduleKey(item.userId, item.date));
+      const previousIsLeave = previousShift === "CUTI";
+      const nextIsLeave = item.shiftType === "CUTI";
+      if (previousIsLeave === nextIsLeave) return;
+
+      leaveDeltaByUser.set(
+        item.userId,
+        (leaveDeltaByUser.get(item.userId) || 0) + (nextIsLeave ? 1 : -1)
+      );
+    });
+
+    const leaveDeductions = [...leaveDeltaByUser.entries()].filter(([, delta]) => delta > 0);
+    if (leaveDeductions.length > 0) {
+      const balances = await prisma.leaveBalance.findMany({
+        where: { userId: { in: leaveDeductions.map(([userId]) => userId) } },
+      });
+      const balanceMap = new Map(balances.map((balance) => [balance.userId, balance]));
+
+      const insufficientUser = leaveDeductions.find(([userId, delta]) => {
+        const balance = balanceMap.get(userId);
+        return (balance?.annualLeave ?? 12) < delta;
+      });
+
+      if (insufficientUser) {
+        return NextResponse.json(
+          { error: "Saldo cuti pegawai tidak cukup untuk jadwal CUTI yang dipilih" },
+          { status: 409 }
+        );
+      }
+    }
+
+    const results = await prisma.$transaction(async (tx) => {
+      const savedSchedules = [];
+
+      for (const item of editableSchedules) {
         const shiftDate = parseDateKey(item.date);
         shiftDate.setHours(0, 0, 0, 0);
 
-        return prisma.shiftAssignment.upsert({
+        const assignment = await tx.shiftAssignment.upsert({
           where: {
             userId_date: {
               userId: item.userId,
@@ -108,14 +168,34 @@ export async function POST(request: Request) {
             shiftType: item.shiftType,
           },
         });
-      })
-    );
+        savedSchedules.push(assignment);
+      }
+
+      for (const [userId, delta] of leaveDeltaByUser.entries()) {
+        if (delta === 0) continue;
+        await tx.leaveBalance.upsert({
+          where: { userId },
+          update: delta > 0
+            ? { annualLeave: { decrement: delta } }
+            : { annualLeave: { increment: Math.abs(delta) } },
+          create: {
+            userId,
+            annualLeave: delta > 0 ? Math.max(12 - delta, 0) : 12 + Math.abs(delta),
+            sickLeave: 0,
+            compensation: 0,
+          },
+        });
+      }
+
+      return savedSchedules;
+    });
 
     return NextResponse.json({
       success: true,
       message: `Berhasil menyimpan ${results.length} jadwal${schedules.length - editableSchedules.length > 0 ? `, ${schedules.length - editableSchedules.length} jadwal dari request dilewati` : ""}`,
       count: results.length,
       skippedRequestSchedules: schedules.length - editableSchedules.length,
+      leaveAdjustments: Object.fromEntries(leaveDeltaByUser),
     });
   } catch (error) {
     console.error("Bulk save schedules error:", error);

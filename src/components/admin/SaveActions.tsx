@@ -8,7 +8,7 @@ interface SaveActionsProps {
   onPublishSuccess?: () => void;
 }
 
-type ApiShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
+type ApiShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 
 export default function SaveActions({ schedule, onPublishSuccess }: SaveActionsProps) {
   const [status, setStatus] = useState<"idle" | "saving" | "success" | "error">("idle");

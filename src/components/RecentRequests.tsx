@@ -9,7 +9,7 @@ const requestTypeLabels: Record<string, string> = {
   SHIFT_SIANG: "Shift Siang",
   SHIFT_MALAM: "Shift Malam",
   CUTI_TAHUNAN: "Cuti Tahunan",
-  CUTI_SAKIT: "Cuti Sakit",
+  CUTI_SAKIT: "Izin / Sakit",
   TUKAR_SHIFT: "Tukar Shift",
 };
 const requestStatusLabels: Record<string, string> = {

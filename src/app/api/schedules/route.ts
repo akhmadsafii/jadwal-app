@@ -55,7 +55,7 @@ export async function GET(request: Request) {
         SHIFT_SIANG: "SIANG",
         SHIFT_MALAM: "MALAM",
         CUTI_TAHUNAN: "CUTI",
-        CUTI_SAKIT: "CUTI",
+        CUTI_SAKIT: "SAKIT",
         LIBUR: "LIBUR",
       };
 
@@ -179,6 +179,7 @@ export async function GET(request: Request) {
       MALAM: 0,
       LIBUR: 0,
       CUTI: 0,
+      SAKIT: 0,
       TURUN: 0,
     };
     employees.forEach((emp) => {
@@ -198,7 +199,7 @@ export async function GET(request: Request) {
       SHIFT_SIANG: "SIANG",
       SHIFT_MALAM: "MALAM",
       CUTI_TAHUNAN: "CUTI",
-      CUTI_SAKIT: "CUTI",
+      CUTI_SAKIT: "SAKIT",
       LIBUR: "LIBUR",
     };
 

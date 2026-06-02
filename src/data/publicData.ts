@@ -152,6 +152,7 @@ export const shiftLegend = [
   { code: "M", label: "Malam (21-07)", cellClass: "cell-m" },
   { code: "L", label: "Libur", cellClass: "cell-l" },
   { code: "C", label: "Cuti", cellClass: "cell-c" },
+  { code: "CS", label: "Cuti Sakit / Izin", cellClass: "cell-cs" },
   { code: "X", label: "Turun Jaga", cellClass: "cell-x" },
   { code: "Mg", label: "Sunday", cellClass: "bg-error-container/40" },
 ];

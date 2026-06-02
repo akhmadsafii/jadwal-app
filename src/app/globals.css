@@ -133,6 +133,7 @@
 .cell-m { background-color: #e2e8f0; color: #1e293b; } /* Malam - Grey tint */
 .cell-mid { background-color: #fef3c7; color: #92400e; } /* Middle - Amber tint */
 .cell-c { background-color: #dbe1ff; color: #00174b; } /* Cuti - Blue tint */
+.cell-cs { background-color: #ffdad6; color: #93000a; } /* Cuti sakit - Red tint */
 .cell-x { background-color: #ffdad6; color: #93000a; } /* Turun Jaga - Red tint */
 
 /* Request-based cell highlight (from approved requests) */

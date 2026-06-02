@@ -7,7 +7,7 @@ import ScheduleGrid from "@/components/public/ScheduleGrid";
 import ShiftLegend from "@/components/public/ShiftLegend";
 import { useAuth } from "@/lib/authContext";
 
-type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
+type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 type ShiftFilter = ShiftType | "ALL";
 type ViewMode = "DAILY" | "CALENDAR";
 
@@ -86,6 +86,14 @@ const shiftMeta: Record<ShiftType, {
     icon: "beach_access",
     chip: "bg-primary-container text-on-primary-container",
     surface: "bg-primary/10 border-primary/20 text-primary",
+  },
+  SAKIT: {
+    code: "CS",
+    label: "Cuti Sakit",
+    time: "Izin / sakit",
+    icon: "medical_services",
+    chip: "bg-error text-on-error",
+    surface: "bg-error-container border-error/20 text-on-error-container",
   },
   TURUN: {
     code: "X",
@@ -171,7 +179,7 @@ export default function PegawaiStaffPage() {
         acc[employee.shiftType] += 1;
         return acc;
       },
-      { PAGI: 0, MIDDLE: 0, SIANG: 0, MALAM: 0, LIBUR: 0, CUTI: 0, TURUN: 0 } as Record<ShiftType, number>
+      { PAGI: 0, MIDDLE: 0, SIANG: 0, MALAM: 0, LIBUR: 0, CUTI: 0, SAKIT: 0, TURUN: 0 } as Record<ShiftType, number>
     );
   }, [employeesWithShift]);
 
@@ -338,7 +346,7 @@ export default function PegawaiStaffPage() {
                 <p className="text-[10px] uppercase tracking-wider text-outline">Dipilih</p>
                 <h2 className="text-lg font-bold text-on-surface mt-1">{formatDateLong(selectedDate)}</h2>
                 <p className="text-xs text-on-surface-variant mt-1">
-                  {workingCount} dinas, {shiftCounts.LIBUR + shiftCounts.CUTI + shiftCounts.TURUN} tidak dinas
+                  {workingCount} dinas, {shiftCounts.LIBUR + shiftCounts.CUTI + shiftCounts.SAKIT + shiftCounts.TURUN} tidak dinas
                 </p>
               </div>
               <div className="w-11 h-11 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center">

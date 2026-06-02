@@ -14,8 +14,8 @@ export async function GET(
       create: {
         userId: id,
         annualLeave: 12,
-        sickLeave: 5,
-        compensation: 2,
+        sickLeave: 0,
+        compensation: 0,
       },
     });
 
@@ -24,6 +24,42 @@ export async function GET(
     console.error("Get leave balance error:", error);
     return NextResponse.json(
       { error: "Terjadi kesalahan saat mengambil saldo cuti" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const { annualLeave } = await request.json();
+
+    const normalizeNumber = (value: unknown) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+    };
+
+    const balance = await prisma.leaveBalance.upsert({
+      where: { userId: id },
+      update: {
+        annualLeave: normalizeNumber(annualLeave),
+      },
+      create: {
+        userId: id,
+        annualLeave: normalizeNumber(annualLeave),
+        sickLeave: 0,
+        compensation: 0,
+      },
+    });
+
+    return NextResponse.json({ success: true, balance });
+  } catch (error) {
+    console.error("Update leave balance error:", error);
+    return NextResponse.json(
+      { error: "Terjadi kesalahan saat menyimpan saldo cuti" },
       { status: 500 }
     );
   }

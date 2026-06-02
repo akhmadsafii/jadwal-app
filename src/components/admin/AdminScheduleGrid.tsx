@@ -31,6 +31,8 @@ function mapShiftToCode(shiftType: string): string {
       return "L";
     case "CUTI":
       return "C";
+    case "SAKIT":
+      return "CS";
     case "TURUN":
       return "X";
     default:
@@ -54,6 +56,8 @@ function getCellClass(code: string, fromRequest: boolean = false): string {
       return fromRequest ? "cell-mid cell-request" : "cell-mid";
     case "C":
       return fromRequest ? "cell-c cell-request" : "cell-c";
+    case "CS":
+      return fromRequest ? "cell-cs cell-request" : "cell-cs";
     case "X":
       return fromRequest ? "cell-x cell-request" : "cell-x";
     default:

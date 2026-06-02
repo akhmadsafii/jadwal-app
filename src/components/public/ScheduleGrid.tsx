@@ -25,6 +25,7 @@ const shiftTypeToCode: Record<string, string> = {
   MALAM: "M",
   LIBUR: "L",
   CUTI: "C",
+  SAKIT: "CS",
   TURUN: "X",
 };
 
@@ -43,6 +44,8 @@ function getCellClass(code: string): string {
       return "cell-mid";
     case "C":
       return "cell-c";
+    case "CS":
+      return "cell-cs";
     case "X":
       return "cell-x";
     default:

@@ -92,7 +92,7 @@ async function main() {
   ];
 
   // Shift types mapping
-const shiftMap: Record<string, "LIBUR" | "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "CUTI" | "TURUN"> = {
+const shiftMap: Record<string, "LIBUR" | "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "CUTI" | "SAKIT" | "TURUN"> = {
   P: "PAGI",      // 07:00 - 14:00
   MID: "MIDDLE",  // 10:00 - 17:00
   S: "SIANG",     // 14:00 - 21:00
@@ -100,6 +100,7 @@ const shiftMap: Record<string, "LIBUR" | "PAGI" | "MIDDLE" | "SIANG" | "MALAM" |
   L: "LIBUR",
   OFF: "LIBUR",
   C: "CUTI",
+  CS: "SAKIT",
   X: "TURUN",
 };
 

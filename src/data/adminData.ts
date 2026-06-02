@@ -1,5 +1,5 @@
 // Shift types matching database enum
-export type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
+export type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 
 // UI display labels with time ranges
 export const shiftTypeLabelMap: Record<ShiftType, string> = {
@@ -9,6 +9,7 @@ export const shiftTypeLabelMap: Record<ShiftType, string> = {
   MALAM: "Malam (21-07)",
   LIBUR: "Libur",
   CUTI: "Cuti",
+  SAKIT: "Cuti Sakit",
   TURUN: "Turun Jaga",
 };
 
@@ -20,6 +21,7 @@ export const shiftTypeShortLabel: Record<ShiftType, string> = {
   MALAM: "M",
   LIBUR: "L",
   CUTI: "C",
+  SAKIT: "CS",
   TURUN: "X",
 };
 
@@ -31,6 +33,7 @@ export const shiftColors: Record<ShiftType, string> = {
   MALAM: "text-secondary",
   LIBUR: "text-outline",
   CUTI: "text-primary",
+  SAKIT: "text-error",
   TURUN: "text-error",
 };
 
@@ -42,6 +45,7 @@ export const shiftBgColors: Record<ShiftType, string> = {
   MALAM: "bg-secondary/10 border-secondary/20",
   LIBUR: "bg-surface-container-highest border-outline/20",
   CUTI: "bg-primary/10 border-primary/20",
+  SAKIT: "bg-error-container border-error/20",
   TURUN: "bg-error/10 border-error/20",
 };
 
@@ -53,11 +57,12 @@ export const shiftAccentClasses: Record<ShiftType, string> = {
   MALAM: "border-l-4 border-l-secondary",
   LIBUR: "opacity-60",
   CUTI: "border-l-4 border-l-primary",
+  SAKIT: "border-l-4 border-l-error",
   TURUN: "border-l-4 border-l-error",
 };
 
 // All shift options for dropdowns
-export const shiftOptions: ShiftType[] = ["PAGI", "MIDDLE", "SIANG", "MALAM", "LIBUR", "CUTI", "TURUN"];
+export const shiftOptions: ShiftType[] = ["PAGI", "MIDDLE", "SIANG", "MALAM", "LIBUR", "CUTI", "SAKIT", "TURUN"];
 
 export interface AdminStaff {
   id: string;
@@ -222,6 +227,7 @@ export const gridCellColors: Record<ShiftType, string> = {
   MALAM: "bg-secondary/10 text-secondary border-secondary/20",
   LIBUR: "bg-surface-container-highest text-outline border-outline/20",
   CUTI: "bg-primary/10 text-primary border-primary/20",
+  SAKIT: "bg-error-container text-on-error-container border-error/20",
   TURUN: "bg-error/10 text-error border-error/20",
 };
 

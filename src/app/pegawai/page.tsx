@@ -6,7 +6,7 @@ import EmployeeTopBar from "@/components/pegawai/EmployeeTopBar";
 import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import { useAuth } from "@/lib/authContext";
 
-type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
+type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 type RequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
 
 interface ShiftAssignment {
@@ -87,6 +87,14 @@ const shiftMeta: Record<ShiftType, {
     pill: "bg-primary-container text-on-primary-container",
     surface: "bg-primary/10 text-primary border-primary/20",
   },
+  SAKIT: {
+    code: "CS",
+    label: "Cuti Sakit",
+    time: "Izin / sakit",
+    icon: "medical_services",
+    pill: "bg-error text-on-error",
+    surface: "bg-error-container text-on-error-container border-error/20",
+  },
   TURUN: {
     code: "X",
     label: "Turun Jaga",
@@ -110,7 +118,7 @@ const requestTypeLabels: Record<string, string> = {
   SHIFT_SIANG: "Shift Siang",
   SHIFT_MALAM: "Shift Malam",
   CUTI_TAHUNAN: "Cuti Tahunan",
-  CUTI_SAKIT: "Cuti Sakit",
+  CUTI_SAKIT: "Izin / Sakit",
   TUKAR_SHIFT: "Tukar Shift",
 };
 
@@ -145,7 +153,7 @@ function getDisplayName(name?: string) {
 }
 
 function isWorkShift(shiftType: ShiftType) {
-  return !["LIBUR", "CUTI", "TURUN"].includes(shiftType);
+  return !["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(shiftType);
 }
 
 function getAssignmentKey(assignment: ShiftAssignment) {
@@ -157,7 +165,7 @@ export default function PegawaiPage() {
   const [schedule, setSchedule] = useState<ShiftAssignment[]>([]);
   const [allEmployees, setAllEmployees] = useState<EmployeeSchedule[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
-  const [leaveBalance, setLeaveBalance] = useState({ annualLeave: 12, sickLeave: 5, compensation: 2 });
+  const [leaveBalance, setLeaveBalance] = useState({ annualLeave: 12, sickLeave: 0, compensation: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
   const now = new Date();

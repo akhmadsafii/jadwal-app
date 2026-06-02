@@ -63,8 +63,8 @@ export async function PUT(
         create: {
           userId: id,
           annualLeave: 12,
-          sickLeave: 5,
-          compensation: 2,
+          sickLeave: 0,
+          compensation: 0,
         },
       });
     }

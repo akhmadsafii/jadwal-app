@@ -33,6 +33,13 @@ export async function GET(request: Request) {
         avatarUrl: true,
         isActive: true,
         sortOrder: true,
+        leaveBalance: {
+          select: {
+            annualLeave: true,
+            sickLeave: true,
+            compensation: true,
+          },
+        },
       },
       orderBy: [
         { sortOrder: "asc" },
@@ -88,8 +95,8 @@ export async function POST(request: Request) {
           ? {
               create: {
                 annualLeave: 12,
-                sickLeave: 5,
-                compensation: 2,
+                sickLeave: 0,
+                compensation: 0,
               },
             }
           : undefined,
