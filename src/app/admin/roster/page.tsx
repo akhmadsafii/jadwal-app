@@ -13,8 +13,9 @@ interface Employee {
   id: string;
   name: string;
   nip: string;
+  sortOrder?: number | null;
   position: string | null;
-  schedule: { date: string; shiftType: string }[];
+  schedule: { date: string; dateKey: string; shiftType: string; fromRequest?: boolean }[];
 }
 
 interface ScheduleData {

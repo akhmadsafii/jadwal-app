@@ -32,19 +32,89 @@ export async function GET(request: Request) {
         orderBy: { date: "asc" },
       });
 
+      // Get approved requests for this user
+      const approvedRequests = await prisma.shiftRequest.findMany({
+        where: {
+          userId,
+          status: "APPROVED",
+          startDate: {
+            gte: new Date(targetYear, targetMonth - 1, 1),
+            lt: new Date(targetYear, targetMonth, 1),
+          },
+        },
+      });
+
+      // Map request types to shift types
+      const requestTypeToShiftType: Record<string, string> = {
+        SHIFT_PAGI: "PAGI",
+        SHIFT_MIDDLE: "MIDDLE",
+        SHIFT_SIANG: "SIANG",
+        SHIFT_MALAM: "MALAM",
+        CUTI_TAHUNAN: "CUTI",
+        CUTI_SAKIT: "CUTI",
+        LIBUR: "LIBUR",
+      };
+
+      const requestDates = new Map<string, string>();
+      approvedRequests.forEach((req) => {
+        const start = new Date(req.startDate);
+        const end = req.endDate ? new Date(req.endDate) : start;
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const shiftType = requestTypeToShiftType[req.type];
+          if (shiftType) requestDates.set(toDateKey(new Date(d)), shiftType);
+        }
+      });
+
+      // Build schedule entries
+      const scheduleEntries: { date: Date; dateKey: string; shiftType: string; fromRequest: boolean }[] = [];
+
+      // Add regular assignments
+      userSchedule.forEach((s) => {
+        const dateKey = toDateKey(s.date);
+        scheduleEntries.push({
+          date: s.date,
+          dateKey,
+          shiftType: s.shiftType,
+          fromRequest: requestDates.has(dateKey),
+        });
+      });
+
+      // Add approved request shifts (only if not already in schedule)
+      const existingDates = new Set(userSchedule.map((s) => toDateKey(s.date)));
+      approvedRequests.forEach((req) => {
+        const start = new Date(req.startDate);
+        const end = req.endDate ? new Date(req.endDate) : start;
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateKey = toDateKey(new Date(d));
+          if (!existingDates.has(dateKey)) {
+            const shiftType = requestDates.get(dateKey);
+            if (shiftType) {
+              scheduleEntries.push({
+                date: new Date(d),
+                dateKey,
+                shiftType,
+                fromRequest: true,
+              });
+            }
+          }
+        }
+      });
+
       return NextResponse.json({
         success: true,
-        schedule: userSchedule.map((s) => ({
-          date: s.date,
-          dateKey: toDateKey(s.date),
-          shiftType: s.shiftType,
-        })),
+        schedule: scheduleEntries,
       });
     }
 
     // Get all employees with their shift assignments
+    // Filter: only active users (isActive: true)
+    // Sort: by sortOrder (ascending), then by name (alphabetically)
     const employees = await prisma.user.findMany({
       where: { role: "EMPLOYEE", isActive: true },
+      orderBy: [
+        { sortOrder: "asc" },
+        { name: "asc" }
+      ],
       include: {
         shiftAssignments: {
           where: {
@@ -54,6 +124,15 @@ export async function GET(request: Request) {
             },
           },
           orderBy: { date: "asc" },
+        },
+        shiftRequests: {
+          where: {
+            status: "APPROVED",
+            startDate: {
+              gte: new Date(targetYear, targetMonth - 1, 1),
+              lt: new Date(targetYear, targetMonth, 1),
+            },
+          },
         },
         leaveBalance: true,
       },
@@ -84,21 +163,76 @@ export async function GET(request: Request) {
     const percentage = (count: number) =>
       totalAssignments > 0 ? Math.round((count / totalAssignments) * 100) : 0;
 
+    // Map shift type from request type
+    const requestTypeToShiftType: Record<string, string> = {
+      SHIFT_PAGI: "PAGI",
+      SHIFT_MIDDLE: "MIDDLE",
+      SHIFT_SIANG: "SIANG",
+      SHIFT_MALAM: "MALAM",
+      CUTI_TAHUNAN: "CUTI",
+      CUTI_SAKIT: "CUTI",
+      LIBUR: "LIBUR",
+    };
+
     return NextResponse.json({
       success: true,
-      employees: employees.map((emp) => ({
-        id: emp.id,
-        name: emp.name,
-        nip: emp.nip,
-        position: emp.position,
-        avatarUrl: emp.avatarUrl,
-        schedule: emp.shiftAssignments.map((s) => ({
-          date: s.date,
-          dateKey: toDateKey(s.date),
-          shiftType: s.shiftType,
-        })),
-        leaveBalance: emp.leaveBalance,
-      })),
+      employees: employees.map((emp) => {
+        // Combine schedule assignments with request-based shifts
+        const scheduleEntries: { date: Date; dateKey: string; shiftType: string; fromRequest: boolean }[] = [];
+        const requestDates = new Map<string, string>();
+
+        emp.shiftRequests.forEach((req) => {
+          const start = new Date(req.startDate);
+          const end = req.endDate ? new Date(req.endDate) : start;
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const shiftType = requestTypeToShiftType[req.type];
+            if (shiftType) requestDates.set(toDateKey(new Date(d)), shiftType);
+          }
+        });
+
+        // Add regular assignments
+        emp.shiftAssignments.forEach((s) => {
+          const dateKey = toDateKey(s.date);
+          scheduleEntries.push({
+            date: s.date,
+            dateKey,
+            shiftType: s.shiftType,
+            fromRequest: requestDates.has(dateKey),
+          });
+        });
+
+        // Add approved request shifts (only if not already in schedule)
+        const existingDates = new Set(emp.shiftAssignments.map((s) => toDateKey(s.date)));
+        emp.shiftRequests.forEach((req) => {
+          const start = new Date(req.startDate);
+          const end = req.endDate ? new Date(req.endDate) : start;
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateKey = toDateKey(new Date(d));
+            if (!existingDates.has(dateKey)) {
+              const shiftType = requestDates.get(dateKey);
+              if (shiftType) {
+                scheduleEntries.push({
+                  date: new Date(d),
+                  dateKey,
+                  shiftType,
+                  fromRequest: true,
+                });
+              }
+            }
+          }
+        });
+
+        return {
+          id: emp.id,
+          name: emp.name,
+          nip: emp.nip,
+          sortOrder: emp.sortOrder,
+          position: emp.position,
+          avatarUrl: emp.avatarUrl,
+          schedule: scheduleEntries,
+          leaveBalance: emp.leaveBalance,
+        };
+      }),
       monthlyStats: monthlyStats || {
         month: targetMonth,
         year: targetYear,

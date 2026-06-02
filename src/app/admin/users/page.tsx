@@ -16,6 +16,7 @@ interface UserItem {
   position?: string | null;
   avatarUrl?: string | null;
   isActive: boolean;
+  sortOrder: number;
 }
 
 interface UserFormState {
@@ -27,6 +28,7 @@ interface UserFormState {
   position: string;
   avatarUrl: string;
   isActive: boolean;
+  sortOrder: number;
   password: string;
 }
 
@@ -38,6 +40,7 @@ const emptyForm: UserFormState = {
   position: "",
   avatarUrl: "",
   isActive: true,
+  sortOrder: 0,
   password: "",
 };
 
@@ -109,6 +112,7 @@ export default function AdminUsersPage() {
       position: user.position || "",
       avatarUrl: user.avatarUrl || "",
       isActive: user.isActive,
+      sortOrder: user.sortOrder || 0,
       password: "",
     });
     setMessage("");
@@ -127,6 +131,7 @@ export default function AdminUsersPage() {
       position: form.position.trim(),
       avatarUrl: form.avatarUrl.trim(),
       isActive: form.isActive,
+      sortOrder: form.sortOrder,
       password: form.password.trim() || undefined,
     };
 
@@ -267,6 +272,11 @@ export default function AdminUsersPage() {
                     }`}>
                       {user.role === "ADMIN" ? "ADMIN" : "PEGAWAI"}
                     </span>
+                    {user.sortOrder > 0 && (
+                      <span className="flex-none rounded px-2 py-0.5 text-[10px] font-bold bg-tertiary-container text-on-tertiary-container">
+                        #{user.sortOrder}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-on-surface-variant truncate">{user.position || "-"}</p>
                   <p className="text-[10px] text-outline">NIP. {user.nip}</p>
@@ -361,6 +371,19 @@ export default function AdminUsersPage() {
               <label className="block">
                 <span className="text-[10px] uppercase text-on-surface-variant">Avatar URL</span>
                 <input value={form.avatarUrl} onChange={(e) => setForm({ ...form, avatarUrl: e.target.value })} className="mt-1 w-full h-10 rounded-lg border border-outline-variant bg-surface px-3 text-sm outline-none focus:border-primary" />
+              </label>
+
+              <label className="block">
+                <span className="text-[10px] uppercase text-on-surface-variant">
+                  Urutan Jadwal <span className="text-tertiary">(lower = muncul duluan)</span>
+                </span>
+                <input
+                  type="number"
+                  value={form.sortOrder}
+                  onChange={(e) => setForm({ ...form, sortOrder: parseInt(e.target.value) || 0 })}
+                  placeholder="0 = default"
+                  className="mt-1 w-full h-10 rounded-lg border border-outline-variant bg-surface px-3 text-sm outline-none focus:border-primary"
+                />
               </label>
 
               <label className="block">

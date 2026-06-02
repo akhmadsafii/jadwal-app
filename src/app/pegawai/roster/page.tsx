@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import EmployeeTopBar from "@/components/pegawai/EmployeeTopBar";
 import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import { useAuth } from "@/lib/authContext";
+import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
 
 type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "TURUN";
 type FilterKey = "ALL" | "WORK" | "OFF" | "NIGHT";
@@ -14,6 +15,7 @@ interface ShiftAssignment {
   date: string;
   dateKey?: string;
   shiftType: ShiftType;
+  fromRequest?: boolean;
 }
 
 interface DaySchedule {
@@ -234,6 +236,7 @@ export default function PegawaiRosterPage() {
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
   const monthName = `${monthNames[currentDate.getMonth()]} ${year}`;
+  const holidays = useIndonesiaHolidays(year);
 
   const days = useMemo<DaySchedule[]>(() => {
     const daysInMonth = new Date(year, month, 0).getDate();
@@ -503,7 +506,14 @@ export default function PegawaiRosterPage() {
               filteredDays.map((item) => {
                 const meta = shiftMeta[item.shiftType];
                 const isTodayItem = item.dateKey === todayKey;
+                const holiday = holidays.get(item.dateKey);
+                const isRedDate = item.date.getDay() === 0 || Boolean(holiday);
                 const dayRequest = getRequestForDay(requests, item.dateKey);
+
+                // Check if this day has a schedule from an approved request
+                const scheduleEntry = schedule.find(s => (s.dateKey || s.date.split("T")[0]) === item.dateKey);
+                const isFromRequest = scheduleEntry?.fromRequest || false;
+
                 return (
                   <button
                     key={item.dateKey}
@@ -512,10 +522,12 @@ export default function PegawaiRosterPage() {
                     className={`rounded-xl border p-3 flex items-center gap-3 ${
                       isTodayItem
                         ? "border-primary bg-primary/5"
-                        : "border-outline-variant bg-surface-container-lowest"
-                    } text-left w-full active:scale-[0.99] transition-transform`}
+                        : isRedDate
+                          ? "border-error/25 bg-error-container/10"
+                          : "border-outline-variant bg-surface-container-lowest"
+                    } ${isFromRequest ? "ring-2 ring-warning" : ""} text-left w-full active:scale-[0.99] transition-transform`}
                   >
-                    <div className={`w-14 rounded-lg py-2 text-center ${isTodayItem ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface"}`}>
+                    <div className={`w-14 rounded-lg py-2 text-center ${isTodayItem ? "bg-primary text-on-primary" : isRedDate ? "bg-error text-on-error" : "bg-surface-container text-on-surface"}`}>
                       <p className="text-[10px] font-semibold uppercase">{formatDay(item.date)}</p>
                       <p className="text-lg font-bold leading-tight">{item.date.getDate()}</p>
                     </div>
@@ -527,9 +539,19 @@ export default function PegawaiRosterPage() {
                         {isTodayItem && (
                           <span className="text-[10px] font-bold text-primary">HARI INI</span>
                         )}
+                        {isFromRequest && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-warning text-white">
+                            PERMINTAAN
+                          </span>
+                        )}
+                        {holiday && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-error-container text-error">
+                            TANGGAL MERAH
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-sm font-bold text-on-surface mt-1">{meta.label}</h3>
-                      <p className="text-xs text-on-surface-variant">{meta.time}</p>
+                      <p className="text-xs text-on-surface-variant">{holiday?.name || meta.time}</p>
                       {dayRequest && (
                         <span className={`inline-flex items-center gap-1 mt-2 px-2 py-1 rounded text-[10px] font-bold ${requestStatusMeta[dayRequest.status].badge}`}>
                           <span className="material-symbols-outlined text-[14px]">{requestStatusMeta[dayRequest.status].icon}</span>

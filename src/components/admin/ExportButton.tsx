@@ -1,12 +1,14 @@
 "use client";
 
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { getDaysInMonth } from "@/data/publicData";
 
 interface Employee {
   id: string;
   name: string;
   nip: string;
+  position?: string | null;
+  sortOrder?: number | null;
   schedule: { date: string; dateKey?: string; shiftType: string }[];
 }
 
@@ -33,14 +35,24 @@ const shiftTypeToCode: Record<string, string> = {
   TURUN: "X",
 };
 
-const shiftRows = [
-  { key: "PAGI", code: "P", label: "Jumlah Pagi", bg: "FFF2CC", fg: "806000" },
-  { key: "MIDDLE", code: "MID", label: "Jumlah Middle", bg: "FCE4D6", fg: "843C0C" },
-  { key: "SIANG", code: "S", label: "Jumlah Siang", bg: "DDEBF7", fg: "1F4E79" },
-  { key: "MALAM", code: "M", label: "Jumlah Malam", bg: "E4DFEC", fg: "4B3F6B" },
-  { key: "LIBUR", code: "L", label: "Jumlah Libur", bg: "E2EFDA", fg: "375623" },
-  { key: "CUTI", code: "C", label: "Jumlah Cuti", bg: "F4B084", fg: "843C0C" },
-  { key: "TURUN", code: "X", label: "Jumlah Turun", bg: "D6DCE4", fg: "333333" },
+const totalColumns = [
+  { code: "P", label: "P" },
+  { code: "S", label: "S" },
+  { code: "MID", label: "Mid" },
+  { code: "M", label: "M" },
+  { code: "L", label: "L" },
+  { code: "X", label: "X" },
+  { code: "C", label: "C" },
+];
+
+const legendRows = [
+  ["P", "Pagi 07:00 - 14:00"],
+  ["MID", "Middle 10:00 - 17:00"],
+  ["S", "Siang 14:00 - 21:00"],
+  ["M", "Malam 21:00 - 07:00"],
+  ["L", "Libur"],
+  ["C", "Cuti"],
+  ["X", "Turun Jaga"],
 ];
 
 function dateKeyToDay(dateKey: string) {
@@ -52,16 +64,31 @@ function assignmentDay(assignment: Employee["schedule"][number]) {
   return new Date(assignment.date).getDate();
 }
 
+function setCellStyle(worksheet: XLSX.WorkSheet, cellRef: string, style: XLSX.CellObject["s"]) {
+  if (!worksheet[cellRef]) worksheet[cellRef] = { t: "s", v: "" };
+  worksheet[cellRef].s = style;
+}
+
 export default function ExportButton({ month, year, employees, monthlyStats }: ExportButtonProps) {
   const monthNames = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
     "Juli", "Agustus", "September", "Oktober", "November", "Desember",
   ];
-  const dayNames = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+  const englishMonthNames = [
+    "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+    "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER",
+  ];
+  const dayNames = ["Mg", "Sn", "Sl", "Rb", "Km", "Jm", "Sb"];
 
   const handleExport = () => {
     const workbook = XLSX.utils.book_new();
     const daysInMonth = getDaysInMonth(year, month);
+    const sortedEmployees = [...employees].sort((a, b) => {
+      const sortA = a.sortOrder ?? 0;
+      const sortB = b.sortOrder ?? 0;
+      if (sortA !== sortB) return sortA - sortB;
+      return a.name.localeCompare(b.name);
+    });
 
     const getDayName = (day: number) => {
       return dayNames[new Date(year, month - 1, day).getDay()];
@@ -76,268 +103,316 @@ export default function ExportButton({ month, year, employees, monthlyStats }: E
       );
     };
 
-    const getShiftCountsForDay = (day: number) => {
-      const counts: Record<string, number> = {
-        PAGI: 0,
-        MIDDLE: 0,
-        SIANG: 0,
-        MALAM: 0,
-        LIBUR: 0,
-        CUTI: 0,
-        TURUN: 0,
-      };
+    const data: (string | number | null)[][] = [];
+    const dayHeaders = Array.from({ length: daysInMonth }, (_, index) => getDayName(index + 1));
+    const dateHeaders = Array.from({ length: daysInMonth }, (_, index) => index + 1);
 
-      employees.forEach((employee) => {
-        const scheduleByDay = getScheduleByDay(employee);
-        const shift = scheduleByDay.get(day) || "LIBUR";
-        counts[shift] = (counts[shift] || 0) + 1;
-      });
-
-      return counts;
-    };
-
-    const data: (string | number)[][] = [];
-
-    data.push(["LAPORAN JADWAL SHIFT APOTEK"]);
-    data.push(["RS BUDI RAHAYU KOTA MAGELANG"]);
-    data.push([`Periode: ${monthNames[month - 1]} ${year}`]);
+    data.push(["JADWAL DINAS FARMASI"]);
+    data.push(["RSUD BUDI RAHAYU KOTA MAGELANG"]);
+    data.push(["Jl. Urip Sumoharjo No. 15, Wates, Magelang Utara, Kota Magelang"]);
     data.push([]);
+    data.push([]);
+    data.push([month, `${englishMonthNames[month - 1]} ${year}`, ...Array(daysInMonth).fill(null), null, "Total"]);
+    data.push(["NO", "NAMA", "KET", ...dayHeaders, "", ...totalColumns.map((item) => item.label)]);
+    data.push(["", "", "", ...dateHeaders, "", ...totalColumns.map((item) => item.label)]);
 
-    data.push(["JADWAL SHIFT"]);
-    data.push(["NO", "NAMA", "NIP", ...Array.from({ length: daysInMonth }, (_, index) => getDayName(index + 1))]);
-    data.push(["", "", "", ...Array.from({ length: daysInMonth }, (_, index) => index + 1)]);
-
-    employees.forEach((employee, index) => {
+    sortedEmployees.forEach((employee, index) => {
       const scheduleByDay = getScheduleByDay(employee);
-      const row: (string | number)[] = [index + 1, employee.name, employee.nip];
+      const scheduleRow: (string | number | null)[] = [
+        index + 1,
+        employee.name,
+        employee.position || "",
+      ];
 
       for (let day = 1; day <= daysInMonth; day++) {
         const shiftType = scheduleByDay.get(day) || "LIBUR";
-        row.push(shiftTypeToCode[shiftType] || "L");
+        scheduleRow.push(shiftTypeToCode[shiftType] || "L");
       }
 
-      data.push(row);
+      scheduleRow.push("");
+      scheduleRow.push(...Array(totalColumns.length).fill(null));
+      data.push(scheduleRow);
+      data.push(["", employee.nip ? `NIP. ${employee.nip}` : "", "", ...Array(daysInMonth + 1 + totalColumns.length).fill(null)]);
     });
 
     data.push([]);
-    data.push(["JUMLAH SHIFT PER TANGGAL"]);
-
-    shiftRows.forEach((shift) => {
-      const row: (string | number)[] = ["", shift.label, ""];
-      for (let day = 1; day <= daysInMonth; day++) {
-        row.push(getShiftCountsForDay(day)[shift.key] || 0);
-      }
-      data.push(row);
+    data.push(["JUMLAH ORANG PER TANGGAL"]);
+    totalColumns.forEach((shift) => {
+      data.push(["", shift.label, "", ...Array(daysInMonth).fill(null), "", ...Array(totalColumns.length).fill(null)]);
     });
 
     data.push([]);
-    data.push(["RINGKASAN BULANAN"]);
-    data.push(["Total Hari Kerja", `${monthlyStats?.totalWorkDays || 0} Hari`]);
+    data.push(["RINGKASAN"]);
+    data.push(["Total Staff", `${sortedEmployees.length} orang`]);
+    data.push(["Total Hari Kerja", `${monthlyStats?.totalWorkDays || 0} hari`]);
     data.push(["Persentase Kehadiran", `${monthlyStats?.attendanceRate || 0}%`]);
-    data.push(["Total Jam Lembur", `${monthlyStats?.overtimeHours || 0} Jam`]);
-    data.push(["Total Staff", `${employees.length} Org`]);
+    data.push(["Total Jam Lembur", `${monthlyStats?.overtimeHours || 0} jam`]);
     data.push([]);
     data.push(["KODE SHIFT"]);
-    data.push(["P", "Pagi 07:00 - 14:00"]);
-    data.push(["MID", "Middle 10:00 - 17:00"]);
-    data.push(["S", "Siang 14:00 - 21:00"]);
-    data.push(["M", "Malam 21:00 - 07:00"]);
-    data.push(["L", "Libur"]);
-    data.push(["C", "Cuti"]);
-    data.push(["X", "Turun Jaga"]);
+    legendRows.forEach((row) => data.push(row));
+    data.push([]);
+    data.push([]);
+    data.push([]);
+    data.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Magelang, " + daysInMonth + " " + monthNames[month - 1] + " " + year]);
+    data.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Kepala Instalasi Farmasi"]);
+    data.push([]);
+    data.push([]);
+    data.push([]);
+    data.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "(....................................)"]);
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
-
-    worksheet["!cols"] = [
-      { wch: 5 },
-      { wch: 32 },
-      { wch: 16 },
-      ...Array.from({ length: daysInMonth }, () => ({ wch: 5 })),
-    ];
-
-    const setCellStyle = (cellRef: string, style: XLSX.CellObject["s"]) => {
-      if (!worksheet[cellRef]) worksheet[cellRef] = { t: "s", v: "" };
-      worksheet[cellRef].s = style;
-    };
-
-    const lastCol = XLSX.utils.encode_col(daysInMonth + 2);
-    const border = {
-      top: { style: "thin", color: { rgb: "B7C3D0" } },
-      bottom: { style: "thin", color: { rgb: "B7C3D0" } },
-      left: { style: "thin", color: { rgb: "B7C3D0" } },
-      right: { style: "thin", color: { rgb: "B7C3D0" } },
-    };
-    const titleStyle = {
-      fill: { fgColor: { rgb: "1F4E79" } },
-      font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
-      alignment: { horizontal: "center" },
-    };
-    const subtitleStyle = {
-      fill: { fgColor: { rgb: "D9EAF7" } },
-      font: { bold: true, color: { rgb: "1F4E79" } },
-      alignment: { horizontal: "center" },
-    };
-    const sectionStyle = {
-      fill: { fgColor: { rgb: "244062" } },
-      font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
-      alignment: { horizontal: "left" },
-    };
-    const headerStyle = {
-      fill: { fgColor: { rgb: "1F4E79" } },
-      font: { bold: true, color: { rgb: "FFFFFF" } },
-      alignment: { horizontal: "center" },
-      border,
-    };
-    const dateStyle = {
-      fill: { fgColor: { rgb: "D9E2F3" } },
-      font: { bold: true, sz: 8 },
-      alignment: { horizontal: "center" },
-      border,
-    };
-
-    setCellStyle("A1", titleStyle);
-    setCellStyle("A2", subtitleStyle);
-    setCellStyle("A3", subtitleStyle);
-    setCellStyle("A5", sectionStyle);
-
-    worksheet["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: daysInMonth + 2 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: daysInMonth + 2 } },
-      { s: { r: 2, c: 0 }, e: { r: 2, c: daysInMonth + 2 } },
-      { s: { r: 4, c: 0 }, e: { r: 4, c: daysInMonth + 2 } },
-    ];
-    worksheet["!rows"] = [
-      { hpt: 24 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 6 },
-      { hpt: 22 },
-      { hpt: 18 },
-    ];
-    worksheet["!freeze"] = { xSplit: 3, ySplit: 6, topLeftCell: "D7", activePane: "bottomRight", state: "frozen" } as any;
-    worksheet["!autofilter"] = { ref: `A6:${lastCol}${7 + employees.length}` };
-
-    const dayHeaderRow = 6;
-    const dateHeaderRow = 7;
-    const scheduleStartRow = 8;
-    const totalTitleRow = scheduleStartRow + employees.length + 1;
-    const totalStartRow = totalTitleRow + 1;
-    const summaryTitleRow = totalStartRow + shiftRows.length + 1;
+    const dayStartCol = 3;
+    const dayEndCol = dayStartCol + daysInMonth - 1;
+    const spacerCol = dayEndCol + 1;
+    const totalStartCol = spacerCol + 1;
+    const lastColIndex = totalStartCol + totalColumns.length - 1;
+    const lastCol = XLSX.utils.encode_col(lastColIndex);
+    const scheduleStartRow = 9;
+    const scheduleEndRow = scheduleStartRow + sortedEmployees.length * 2 - 1;
+    const countTitleRow = scheduleEndRow + 2;
+    const countStartRow = countTitleRow + 1;
+    const summaryTitleRow = countStartRow + totalColumns.length + 1;
     const legendTitleRow = summaryTitleRow + 6;
+    const signatureStartRow = legendTitleRow + legendRows.length + 4;
 
-    for (let col = 0; col < 3 + daysInMonth; col++) {
-      setCellStyle(`${XLSX.utils.encode_col(col)}${dayHeaderRow}`, headerStyle);
-      setCellStyle(`${XLSX.utils.encode_col(col)}${dateHeaderRow}`, col < 3 ? headerStyle : dateStyle);
-    }
+    sortedEmployees.forEach((employee, index) => {
+      const excelRow = scheduleStartRow + index * 2;
+      const dayStart = XLSX.utils.encode_cell({ r: excelRow - 1, c: dayStartCol });
+      const dayEnd = XLSX.utils.encode_cell({ r: excelRow - 1, c: dayEndCol });
 
-    employees.forEach((employee, employeeIndex) => {
-      const row = scheduleStartRow + employeeIndex;
-      const baseFill = employeeIndex % 2 === 0 ? "FFFFFF" : "F8FAFC";
-      ["A", "B", "C"].forEach((col) => {
-        setCellStyle(`${col}${row}`, {
-          fill: { fgColor: { rgb: baseFill } },
-          font: { bold: col === "B" },
-          alignment: { horizontal: col === "A" ? "center" : "left" },
-          border,
-        });
+      totalColumns.forEach((shift, shiftIndex) => {
+        const cellRef = XLSX.utils.encode_cell({ r: excelRow - 1, c: totalStartCol + shiftIndex });
+        worksheet[cellRef] = { t: "n", f: `COUNTIF(${dayStart}:${dayEnd},"${shift.code}")` };
       });
     });
 
-    employees.forEach((employee, employeeIndex) => {
+    totalColumns.forEach((shift, shiftIndex) => {
+      const excelRow = countStartRow + shiftIndex;
+      for (let day = 1; day <= daysInMonth; day++) {
+        const colIndex = dayStartCol + day - 1;
+        const col = XLSX.utils.encode_col(colIndex);
+        const cellRef = XLSX.utils.encode_cell({ r: excelRow - 1, c: colIndex });
+        worksheet[cellRef] = { t: "n", f: `COUNTIF(${col}${scheduleStartRow}:${col}${scheduleEndRow},"${shift.code}")` };
+      }
+    });
+
+    worksheet["!cols"] = [
+      { wch: 5 },
+      { wch: 36 },
+      { wch: 7, hidden: true },
+      ...Array.from({ length: daysInMonth }, () => ({ wch: 4 })),
+      { wch: 4, hidden: true },
+      ...Array.from({ length: totalColumns.length }, (_, index) => ({ wch: index === 2 ? 6 : 4 })),
+    ];
+
+    worksheet["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: dayEndCol } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: dayEndCol } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: dayEndCol } },
+      { s: { r: 5, c: 1 }, e: { r: 5, c: dayEndCol } },
+      { s: { r: 5, c: totalStartCol }, e: { r: 5, c: lastColIndex } },
+      { s: { r: 6, c: 0 }, e: { r: 7, c: 0 } },
+      { s: { r: 6, c: 1 }, e: { r: 7, c: 1 } },
+      { s: { r: 6, c: 2 }, e: { r: 7, c: 2 } },
+      { s: { r: countTitleRow - 1, c: 0 }, e: { r: countTitleRow - 1, c: dayEndCol } },
+      { s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 2 } },
+      { s: { r: legendTitleRow - 1, c: 0 }, e: { r: legendTitleRow - 1, c: 1 } },
+      { s: { r: signatureStartRow - 1, c: 21 }, e: { r: signatureStartRow - 1, c: Math.min(31, lastColIndex) } },
+      { s: { r: signatureStartRow, c: 21 }, e: { r: signatureStartRow, c: Math.min(31, lastColIndex) } },
+      { s: { r: signatureStartRow + 4, c: 21 }, e: { r: signatureStartRow + 4, c: Math.min(31, lastColIndex) } },
+    ];
+
+    sortedEmployees.forEach((_, index) => {
+      const nipRow = scheduleStartRow + index * 2 + 1;
+      worksheet["!merges"]!.push({ s: { r: nipRow - 1, c: 1 }, e: { r: nipRow - 1, c: 2 } });
+    });
+
+    worksheet["!rows"] = [
+      { hpt: 24 },
+      { hpt: 20 },
+      { hpt: 18 },
+      { hpt: 8 },
+      { hpt: 8 },
+      { hpt: 22 },
+      { hpt: 18 },
+      { hpt: 18 },
+      ...Array.from({ length: sortedEmployees.length * 2 }, (_, index) => ({ hpt: index % 2 === 0 ? 20 : 16 })),
+    ];
+    worksheet["!freeze"] = { xSplit: 3, ySplit: 8, topLeftCell: "D9", activePane: "bottomRight", state: "frozen" } as any;
+    const colors = {
+      green: "3F7548",
+      lightGreen: "D4E8D7",
+      mediumGreen: "7EBA88",
+      magenta: "FF66FF",
+      grid: "808080",
+      white: "FFFFFF",
+    };
+    const baseFont = { name: "Arial", sz: 9, color: { rgb: "000000" } };
+    const border = {
+      top: { style: "thin", color: { rgb: colors.grid } },
+      bottom: { style: "thin", color: { rgb: colors.grid } },
+      left: { style: "thin", color: { rgb: colors.grid } },
+      right: { style: "thin", color: { rgb: colors.grid } },
+    };
+    const headerStyle = {
+      fill: { patternType: "solid", fgColor: { rgb: colors.lightGreen } },
+      font: { ...baseFont, bold: true },
+      alignment: { horizontal: "center", vertical: "center" },
+      border,
+    };
+    const dateStyle = {
+      fill: { patternType: "solid", fgColor: { rgb: colors.white } },
+      font: { ...baseFont, bold: true },
+      alignment: { horizontal: "center", vertical: "center" },
+      border,
+    };
+    const specialDateStyle = {
+      fill: { patternType: "solid", fgColor: { rgb: colors.magenta } },
+      font: { ...baseFont, bold: true },
+      alignment: { horizontal: "center", vertical: "center" },
+      border,
+    };
+    const sectionStyle = {
+      fill: { patternType: "solid", fgColor: { rgb: colors.green } },
+      font: { ...baseFont, bold: true, color: { rgb: colors.white } },
+      alignment: { horizontal: "center", vertical: "center" },
+      border,
+    };
+    const titleStyle = {
+      font: { name: "Arial", bold: true, sz: 13 },
+      alignment: { horizontal: "center" },
+    };
+    const subtitleStyle = {
+      font: { name: "Arial", bold: true, sz: 10 },
+      alignment: { horizontal: "center" },
+    };
+    const totalStyle = {
+      fill: { patternType: "solid", fgColor: { rgb: colors.lightGreen } },
+      font: { ...baseFont, bold: true },
+      alignment: { horizontal: "center", vertical: "center" },
+      border,
+    };
+
+    setCellStyle(worksheet, "A1", titleStyle);
+    setCellStyle(worksheet, "A2", subtitleStyle);
+    setCellStyle(worksheet, "A3", subtitleStyle);
+    setCellStyle(worksheet, "A6", sectionStyle);
+    setCellStyle(worksheet, "B6", sectionStyle);
+    setCellStyle(worksheet, `${XLSX.utils.encode_col(totalStartCol)}6`, headerStyle);
+    setCellStyle(worksheet, `A${countTitleRow}`, sectionStyle);
+    setCellStyle(worksheet, `A${summaryTitleRow}`, sectionStyle);
+    setCellStyle(worksheet, `A${legendTitleRow}`, sectionStyle);
+
+    for (let col = 0; col <= lastColIndex; col++) {
+      const dayNumber = col - dayStartCol + 1;
+      const isSpecialDate = dayNumber === 1 || (dayNumber >= 1 && dayNumber <= daysInMonth && new Date(year, month - 1, dayNumber).getDay() === 0);
+      const colName = XLSX.utils.encode_col(col);
+      const headerForCol = col >= totalStartCol ? totalStyle : headerStyle;
+      setCellStyle(worksheet, `${colName}7`, col >= dayStartCol && col <= dayEndCol && isSpecialDate ? specialDateStyle : headerForCol);
+      setCellStyle(worksheet, `${colName}8`, col >= dayStartCol && col <= dayEndCol ? (isSpecialDate ? specialDateStyle : dateStyle) : headerForCol);
+    }
+
+    sortedEmployees.forEach((employee, employeeIndex) => {
+      const row = scheduleStartRow + employeeIndex * 2;
+      const nipRow = row + 1;
+
+      for (let col = 0; col <= lastColIndex; col++) {
+        const colName = XLSX.utils.encode_col(col);
+        setCellStyle(worksheet, `${colName}${row}`, {
+          fill: { patternType: "solid", fgColor: { rgb: col >= totalStartCol ? colors.lightGreen : colors.white } },
+          font: { ...baseFont, bold: col === 1 },
+          alignment: { horizontal: col === 0 || col >= dayStartCol ? "center" : "left", vertical: "center" },
+          border,
+        });
+        setCellStyle(worksheet, `${colName}${nipRow}`, {
+          fill: { patternType: "solid", fgColor: { rgb: colors.white } },
+          font: { name: "Arial", italic: true, sz: 9, color: { rgb: "000000" } },
+          alignment: { horizontal: col === 1 ? "left" : "center", vertical: "center" },
+          border,
+        });
+      }
+
       const scheduleByDay = getScheduleByDay(employee);
       for (let day = 1; day <= daysInMonth; day++) {
         const shiftType = scheduleByDay.get(day) || "LIBUR";
         const code = shiftTypeToCode[shiftType] || "L";
-        const cell = `${XLSX.utils.encode_col(day + 2)}${scheduleStartRow + employeeIndex}`;
+        const isSpecialDate = day === 1 || new Date(year, month - 1, day).getDay() === 0;
+        setCellStyle(worksheet, `${XLSX.utils.encode_col(dayStartCol + day - 1)}${row}`, {
+          alignment: { horizontal: "center", vertical: "center" },
+          fill: { patternType: "solid", fgColor: { rgb: isSpecialDate ? colors.magenta : colors.white } },
+          font: { ...baseFont, bold: true },
+          border,
+        });
+      }
 
-        let bgColor = "FFFFFF";
-        let fontColor = "000000";
-        if (code === "P") {
-          bgColor = "FFF2CC";
-          fontColor = "806000";
-        } else if (code === "MID") {
-          bgColor = "FCE4D6";
-          fontColor = "843C0C";
-        } else if (code === "S") {
-          bgColor = "DDEBF7";
-          fontColor = "1F4E79";
-        } else if (code === "M") {
-          bgColor = "E4DFEC";
-          fontColor = "4B3F6B";
-        } else if (code === "L") {
-          bgColor = "E2EFDA";
-          fontColor = "375623";
-        } else if (code === "C") {
-          bgColor = "F4B084";
-          fontColor = "843C0C";
-        } else if (code === "X") {
-          bgColor = "D6DCE4";
-          fontColor = "333333";
-        }
+      totalColumns.forEach((shift, shiftIndex) => {
+        setCellStyle(worksheet, `${XLSX.utils.encode_col(totalStartCol + shiftIndex)}${row}`, {
+          alignment: { horizontal: "center", vertical: "center" },
+          fill: { patternType: "solid", fgColor: { rgb: colors.lightGreen } },
+          font: { ...baseFont, bold: true },
+          border,
+        });
+      });
+    });
 
-        setCellStyle(cell, {
+    totalColumns.forEach((shift, shiftIndex) => {
+      const row = countStartRow + shiftIndex;
+      setCellStyle(worksheet, `B${row}`, {
+        fill: { patternType: "solid", fgColor: { rgb: colors.lightGreen } },
+        font: { ...baseFont, bold: true },
+        alignment: { horizontal: "center" },
+        border,
+      });
+      for (let col = 0; col <= lastColIndex; col++) {
+        const cell = `${XLSX.utils.encode_col(col)}${row}`;
+        setCellStyle(worksheet, cell, {
+          fill: { patternType: "solid", fgColor: { rgb: colors.lightGreen } },
+          font: { ...baseFont, bold: true },
           alignment: { horizontal: "center" },
-          fill: { fgColor: { rgb: bgColor } },
-          font: { bold: true, color: { rgb: fontColor } },
           border,
         });
       }
     });
 
-    setCellStyle(`A${totalTitleRow}`, sectionStyle);
-    worksheet["!merges"].push({ s: { r: totalTitleRow - 1, c: 0 }, e: { r: totalTitleRow - 1, c: daysInMonth + 2 } });
-    for (let row = totalStartRow; row < totalStartRow + shiftRows.length; row++) {
-      const shift = shiftRows[row - totalStartRow];
-      setCellStyle(`B${row}`, {
-        fill: { fgColor: { rgb: shift.bg } },
-        font: { bold: true, color: { rgb: shift.fg } },
-        border,
-      });
-      setCellStyle(`A${row}`, { fill: { fgColor: { rgb: shift.bg } }, border });
-      setCellStyle(`C${row}`, { fill: { fgColor: { rgb: shift.bg } }, border });
-      for (let col = 3; col < 3 + daysInMonth; col++) {
-        setCellStyle(`${XLSX.utils.encode_col(col)}${row}`, {
-          alignment: { horizontal: "center" },
-          font: { bold: true },
-          fill: { fgColor: { rgb: shift.bg } },
-          border,
-        });
-      }
-    }
-
-    setCellStyle(`A${summaryTitleRow}`, sectionStyle);
-    worksheet["!merges"].push({ s: { r: summaryTitleRow - 1, c: 0 }, e: { r: summaryTitleRow - 1, c: 2 } });
     for (let row = summaryTitleRow + 1; row <= summaryTitleRow + 4; row++) {
-      setCellStyle(`A${row}`, {
-        fill: { fgColor: { rgb: "F8FAFC" } },
-        font: { bold: true },
+      setCellStyle(worksheet, `A${row}`, {
+        fill: { patternType: "solid", fgColor: { rgb: colors.lightGreen } },
+        font: { ...baseFont, bold: true },
         border,
       });
-      setCellStyle(`B${row}`, {
-        fill: { fgColor: { rgb: "FFFFFF" } },
+      setCellStyle(worksheet, `B${row}`, {
+        fill: { patternType: "solid", fgColor: { rgb: colors.white } },
+        font: baseFont,
         alignment: { horizontal: "right" },
         border,
       });
     }
 
-    setCellStyle(`A${legendTitleRow}`, sectionStyle);
-    worksheet["!merges"].push({ s: { r: legendTitleRow - 1, c: 0 }, e: { r: legendTitleRow - 1, c: 1 } });
-    shiftRows.forEach((shift, index) => {
+    legendRows.forEach((legend, index) => {
       const row = legendTitleRow + index + 1;
-      setCellStyle(`A${row}`, {
-        fill: { fgColor: { rgb: shift.bg } },
-        font: { bold: true, color: { rgb: shift.fg } },
+      setCellStyle(worksheet, `A${row}`, {
+        fill: { patternType: "solid", fgColor: { rgb: colors.lightGreen } },
+        font: { ...baseFont, bold: true },
         alignment: { horizontal: "center" },
         border,
       });
-      setCellStyle(`B${row}`, {
-        fill: { fgColor: { rgb: shift.bg } },
-        font: { color: { rgb: shift.fg } },
+      setCellStyle(worksheet, `B${row}`, {
+        fill: { patternType: "solid", fgColor: { rgb: colors.white } },
+        font: baseFont,
         border,
       });
     });
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, `Jadwal ${monthNames[month - 1]} ${year}`);
+    for (let row = signatureStartRow; row <= signatureStartRow + 4; row++) {
+      for (let col = 21; col <= Math.min(31, lastColIndex); col++) {
+        setCellStyle(worksheet, `${XLSX.utils.encode_col(col)}${row}`, {
+          font: baseFont,
+          alignment: { horizontal: "center", vertical: "center" },
+        });
+      }
+    }
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, `${monthNames[month - 1]} ${year}`);
     XLSX.writeFile(workbook, `Jadwal_APOTEK_${monthNames[month - 1]}_${year}.xlsx`);
   };
 

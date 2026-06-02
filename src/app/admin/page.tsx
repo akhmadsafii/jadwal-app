@@ -32,6 +32,7 @@ export default function AdminSchedulePage() {
   const [schedule, setSchedule] = useState<Record<string, Record<string, ShiftType>>>({});
   const [staff, setStaff] = useState<AdminStaff[]>([]);
   const [initialSchedule, setInitialSchedule] = useState<Record<string, Record<string, ShiftType>>>({});
+  const [requestLockedSchedule, setRequestLockedSchedule] = useState<Record<string, Record<string, boolean>>>({});
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
@@ -71,10 +72,16 @@ export default function AdminSchedulePage() {
 
         const data = await scheduleResponse.json();
         const loadedSchedule: Record<string, Record<string, ShiftType>> = {};
+        const lockedSchedule: Record<string, Record<string, boolean>> = {};
         (data.employees || []).forEach((employee: any) => {
           loadedSchedule[employee.id] = {};
+          lockedSchedule[employee.id] = {};
           employee.schedule?.forEach((assignment: any) => {
-            loadedSchedule[employee.id][assignment.dateKey || assignment.date.split("T")[0]] = assignment.shiftType;
+            const dateKey = assignment.dateKey || assignment.date.split("T")[0];
+            loadedSchedule[employee.id][dateKey] = assignment.shiftType;
+            if (assignment.fromRequest) {
+              lockedSchedule[employee.id][dateKey] = true;
+            }
           });
         });
 
@@ -83,6 +90,7 @@ export default function AdminSchedulePage() {
         );
         setInitialSchedule(loadedSchedule);
         setSchedule(loadedSchedule);
+        setRequestLockedSchedule(lockedSchedule);
       } catch (error) {
         console.error("Failed to load admin schedule data:", error);
         setLoadError("Data pegawai belum bisa dimuat. Pastikan tabel User sudah berisi pegawai.");
@@ -96,6 +104,7 @@ export default function AdminSchedulePage() {
 
   const handleShiftChange = (staffId: string, date: Date, shift: ShiftType) => {
     const dateKey = getDateKey(date);
+    if (requestLockedSchedule[staffId]?.[dateKey]) return;
     setSchedule((prev) => ({
       ...prev,
       [staffId]: {
@@ -114,6 +123,10 @@ export default function AdminSchedulePage() {
       newSchedule[member.id] = {};
       for (let day = 1; day <= daysInMonth; day++) {
         const dateKey = `${currentMonth.year}-${String(currentMonth.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        if (requestLockedSchedule[member.id]?.[dateKey]) {
+          newSchedule[member.id][dateKey] = schedule[member.id]?.[dateKey] || "LIBUR";
+          continue;
+        }
         const shiftIndex = (staffIdx + day - 1) % shifts.length;
         newSchedule[member.id][dateKey] = shifts[shiftIndex];
       }
@@ -136,6 +149,7 @@ export default function AdminSchedulePage() {
           const date = new Date(dateKey);
           date.setDate(date.getDate() + 7);
           const newDateKey = getDateKey(date);
+          if (requestLockedSchedule[member.id]?.[newDateKey]) return;
           if (!newSchedule[member.id]) {
             newSchedule[member.id] = {};
           }
@@ -150,8 +164,17 @@ export default function AdminSchedulePage() {
 
   const handleClearAll = () => {
     if (confirm("Apakah Anda yakin ingin menghapus semua perubahan jadwal bulan ini?")) {
-      setSchedule({});
-      setInitialSchedule({});
+      const lockedOnly: Record<string, Record<string, ShiftType>> = {};
+      Object.entries(requestLockedSchedule).forEach(([staffId, dates]) => {
+        Object.keys(dates).forEach((dateKey) => {
+          const shift = schedule[staffId]?.[dateKey];
+          if (!shift) return;
+          if (!lockedOnly[staffId]) lockedOnly[staffId] = {};
+          lockedOnly[staffId][dateKey] = shift;
+        });
+      });
+      setSchedule(lockedOnly);
+      setInitialSchedule(lockedOnly);
     }
   };
 
@@ -189,6 +212,7 @@ export default function AdminSchedulePage() {
               staff={staff}
               initialDate={new Date(currentMonth.year, currentMonth.month - 1, 1)}
               initialSchedule={initialSchedule}
+              requestLockedSchedule={requestLockedSchedule}
               onMonthChange={setCurrentMonth}
               onShiftChange={handleShiftChange}
             />

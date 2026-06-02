@@ -1,13 +1,14 @@
 "use client";
 
 import { dayNames, getDaysInMonth } from "@/data/publicData";
+import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
 
 interface Employee {
   id: string;
   name: string;
   nip: string;
   position: string | null;
-  schedule: { date: string; shiftType: string }[];
+  schedule: { date: string; dateKey: string; shiftType: string; fromRequest?: boolean }[];
 }
 
 interface AdminScheduleGridProps {
@@ -37,25 +38,26 @@ function mapShiftToCode(shiftType: string): string {
   }
 }
 
-function getCellClass(code: string): string {
+function getCellClass(code: string, fromRequest: boolean = false): string {
+  const baseClass = fromRequest ? "ring-2 ring-warning" : "";
   const upperCode = code.toUpperCase();
   switch (upperCode) {
     case "L":
-      return "cell-l";
+      return fromRequest ? "cell-l cell-request" : "cell-l";
     case "P":
-      return "cell-p";
+      return fromRequest ? "cell-p cell-request" : "cell-p";
     case "S":
-      return "cell-s";
+      return fromRequest ? "cell-s cell-request" : "cell-s";
     case "M":
-      return "cell-m";
+      return fromRequest ? "cell-m cell-request" : "cell-m";
     case "MID":
-      return "cell-mid";
+      return fromRequest ? "cell-mid cell-request" : "cell-mid";
     case "C":
-      return "cell-c";
+      return fromRequest ? "cell-c cell-request" : "cell-c";
     case "X":
-      return "cell-x";
+      return fromRequest ? "cell-x cell-request" : "cell-x";
     default:
-      return "cell-p";
+      return fromRequest ? "cell-p cell-request" : "cell-p";
   }
 }
 
@@ -65,14 +67,19 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
   const actualDaysInMonth = getDaysInMonth(year, month);
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
   const dayNamesStartIndex = firstDayOfMonth % 7;
+  const holidays = useIndonesiaHolidays(year);
 
   // Create a map of schedules for quick lookup
-  const scheduleMap = new Map<string, string>();
+  // Key: "userId-dateKey", Value: { code, fromRequest }
+  const scheduleMap = new Map<string, { code: string; fromRequest: boolean }>();
   employees.forEach((emp) => {
     emp.schedule.forEach((s) => {
       const dateObj = new Date(s.date);
       const dayKey = dateObj.getDate();
-      scheduleMap.set(`${emp.id}-${dayKey}`, mapShiftToCode(s.shiftType));
+      scheduleMap.set(`${emp.id}-${dayKey}`, {
+        code: mapShiftToCode(s.shiftType),
+        fromRequest: s.fromRequest || false,
+      });
     });
   });
 
@@ -94,25 +101,28 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
               {Array.from({ length: actualDaysInMonth }, (_, i) => {
                 const dayIndex = (dayNamesStartIndex + i) % 7;
                 const dayName = dayNames[dayIndex];
-                const sunday = dayName === "Mg";
+                const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+                const holiday = holidays.get(dateKey);
+                const isRedDate = dayName === "Mg" || Boolean(holiday);
 
                 return (
                   <th
                     key={i + 1}
                     className={`min-w-10 py-2 text-center border-r border-outline-variant ${
-                      sunday ? "bg-error-container/20" : ""
+                      isRedDate ? "bg-error-container/20" : ""
                     }`}
+                    title={holiday?.name || (dayName === "Mg" ? "Minggu" : "")}
                   >
                     <div
                       className={`text-[10px] ${
-                        sunday ? "text-error" : "text-on-surface-variant"
+                        isRedDate ? "text-error" : "text-on-surface-variant"
                       }`}
                     >
                       {dayName}
                     </div>
                     <div
                       className={`text-xs ${
-                        sunday ? "text-error font-bold" : "text-on-surface"
+                        isRedDate ? "text-error font-bold" : "text-on-surface"
                       }`}
                     >
                       {i + 1}
@@ -143,18 +153,24 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
 
                   {/* Schedule Cells - render based on actual dates */}
                   {Array.from({ length: actualDaysInMonth }, (_, dayIdx) => {
-                    const scheduleCode = scheduleMap.get(`${emp.id}-${dayIdx + 1}`) || "L";
+                    const scheduleInfo = scheduleMap.get(`${emp.id}-${dayIdx + 1}`) || { code: "L", fromRequest: false };
+                    const scheduleCode = scheduleInfo.code;
+                    const fromRequest = scheduleInfo.fromRequest;
                     const dayIndex = (dayNamesStartIndex + dayIdx) % 7;
-                    const isSundayCell = dayNames[dayIndex] === "Mg";
+                    const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(dayIdx + 1).padStart(2, "0")}`;
+                    const holiday = holidays.get(dateKey);
+                    const isRedDate = dayNames[dayIndex] === "Mg" || Boolean(holiday);
 
                     return (
                       <td
                         key={dayIdx}
                         className={`min-w-10 h-10 text-center border-r border-outline-variant text-xs ${getCellClass(
-                          scheduleCode
-                        )} ${isSundayCell ? "brightness-95" : ""}`}
+                          scheduleCode,
+                          fromRequest
+                        )} ${isRedDate ? "brightness-95 ring-1 ring-inset ring-error/20" : ""}`}
+                        title={[holiday?.name, fromRequest ? "Dari pengajuan pegawai" : ""].filter(Boolean).join(" - ")}
                       >
-                        {scheduleCode}
+                        {fromRequest ? <span className="relative">{scheduleCode}<span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-warning rounded-full"></span></span> : scheduleCode}
                       </td>
                     );
                   })}

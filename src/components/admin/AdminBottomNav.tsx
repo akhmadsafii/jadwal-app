@@ -8,7 +8,7 @@ export default function AdminBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 flex justify-around items-center px-2 pb-6 bg-surface border-t border-outline-variant h-20 z-50 shadow-sm">
+    <nav className="fixed bottom-0 left-0 right-0 flex justify-around items-center px-2 bg-surface border-t border-outline-variant h-20 z-50 shadow-sm pb-safe">
       {adminNavItems.map((item, idx) => {
         const href = item.href;
         const isActive = pathname === href || (item.label === "Roster" && pathname === "/admin/roster");

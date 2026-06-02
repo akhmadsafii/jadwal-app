@@ -68,7 +68,7 @@ export default function EmployeeTopBar() {
   };
 
   return (
-    <header className="bg-surface w-full top-0 sticky z-40 border-b border-outline-variant">
+    <header className="bg-surface w-full top-0 sticky z-40 border-b border-outline-variant pt-safe">
       <div className="h-16 px-container-margin flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.accent}`}>

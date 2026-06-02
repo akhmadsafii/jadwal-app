@@ -6,6 +6,7 @@ export type EmployeeShiftType =
   | "SHIFT_MALAM"     // Malam: 21:00 - 07:00
   | "CUTI_TAHUNAN"    // Cuti Tahunan
   | "CUTI_SAKIT"      // Cuti Sakit
+  | "LIBUR"           // Ajukan Libur (bukan cuti)
   | "TUKAR_SHIFT";    // Tukar Shift
 
 export type EmployeeRequestStatus = "pending" | "approved" | "expired" | "rejected";
@@ -41,6 +42,7 @@ export const shiftTimeRanges: Record<EmployeeShiftType, string> = {
   SHIFT_MALAM: "21:00 — 07:00",
   CUTI_TAHUNAN: "Libur",
   CUTI_SAKIT: "Libur",
+  LIBUR: "Libur",
   TUKAR_SHIFT: "-",
 };
 
@@ -52,6 +54,7 @@ export const shiftCodes: Record<EmployeeShiftType, string> = {
   SHIFT_MALAM: "M",
   CUTI_TAHUNAN: "L",
   CUTI_SAKIT: "L",
+  LIBUR: "L",
   TUKAR_SHIFT: "-",
 };
 
@@ -107,6 +110,7 @@ export const employeeRequestTypeLabels: Record<EmployeeShiftType, string> = {
   SHIFT_MALAM: "Shift Malam (21-07)",
   CUTI_TAHUNAN: "Cuti Tahunan",
   CUTI_SAKIT: "Cuti Sakit",
+  LIBUR: "Ajukan Libur",
   TUKAR_SHIFT: "Tukar Shift",
 };
 
@@ -134,6 +138,7 @@ export const employeeRequestIcons: Record<EmployeeShiftType, string> = {
   SHIFT_MALAM: "nightlight",
   CUTI_TAHUNAN: "beach_access",
   CUTI_SAKIT: "medical_services",
+  LIBUR: "weekend",
   TUKAR_SHIFT: "swap_horiz",
 };
 
@@ -143,6 +148,7 @@ export const employeeRequestTypeOptions = [
   { value: "SHIFT_MIDDLE", label: "Shift Middle (10-17)" },
   { value: "SHIFT_SIANG", label: "Shift Siang (14-21)" },
   { value: "SHIFT_MALAM", label: "Shift Malam (21-07)" },
+  { value: "LIBUR", label: "Ajukan Libur (bukan cuti)" },
   { value: "CUTI_TAHUNAN", label: "Cuti Tahunan" },
   { value: "CUTI_SAKIT", label: "Cuti Sakit" },
   { value: "TUKAR_SHIFT", label: "Tukar Shift" },

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { dayNames, getDaysInMonth } from "@/data/publicData";
+import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
 
 interface ScheduleGridProps {
   daysInMonth?: number;
@@ -87,6 +88,7 @@ export default function ScheduleGrid({
   const dayNamesStartIndex = firstDayOfMonth % 7; // 0=Sun in JS, convert to our index
   const visibleEmployees = employees ?? fetchedEmployees;
   const loading = isLoading || isFetching;
+  const holidays = useIndonesiaHolidays(year);
 
   useEffect(() => {
     if (employees) return;
@@ -117,25 +119,28 @@ export default function ScheduleGrid({
               {Array.from({ length: actualDaysInMonth }, (_, i) => {
                 const dayIndex = (dayNamesStartIndex + i) % 7;
                 const dayName = dayNames[dayIndex];
-                const sunday = dayName === "Mg";
+                const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+                const holiday = holidays.get(dateKey);
+                const isRedDate = dayName === "Mg" || Boolean(holiday);
 
                 return (
                   <th
                     key={i + 1}
                     className={`min-w-[40px] py-2 text-center border-r border-outline-variant ${
-                      sunday ? "bg-error-container/20" : ""
+                      isRedDate ? "bg-error-container/20" : ""
                     }`}
+                    title={holiday?.name || (dayName === "Mg" ? "Minggu" : "")}
                   >
                     <div
                       className={`text-[10px] ${
-                        sunday ? "text-error" : "text-on-surface-variant"
+                        isRedDate ? "text-error" : "text-on-surface-variant"
                       }`}
                     >
                       {dayName}
                     </div>
                     <div
                       className={`text-xs ${
-                        sunday ? "text-error font-bold" : "text-on-surface"
+                        isRedDate ? "text-error font-bold" : "text-on-surface"
                       }`}
                     >
                       {i + 1}
@@ -188,14 +193,17 @@ export default function ScheduleGrid({
                   {Array.from({ length: actualDaysInMonth }, (_, idx) => {
                     const code = scheduleByDay.get(idx + 1) || "L";
                     const dayIndex = (dayNamesStartIndex + idx) % 7;
-                    const isSundayCell = dayNames[dayIndex] === "Mg";
+                    const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(idx + 1).padStart(2, "0")}`;
+                    const holiday = holidays.get(dateKey);
+                    const isRedDate = dayNames[dayIndex] === "Mg" || Boolean(holiday);
 
                     return (
                       <td
                         key={idx}
                         className={`min-w-[40px] h-10 text-center border-r border-outline-variant text-xs ${getCellClass(
                           code
-                        )} ${isSundayCell ? "brightness-95" : ""}`}
+                        )} ${isRedDate ? "brightness-95 ring-1 ring-inset ring-error/20" : ""}`}
+                        title={holiday?.name || ""}
                       >
                         {code}
                       </td>

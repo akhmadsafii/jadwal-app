@@ -64,7 +64,7 @@ export default function Home() {
     <div className="min-h-screen">
       <PublicTopBar />
 
-      <main className="pt-14">
+      <main>
         <MonthSelector onMonthChange={handleMonthChange} />
         <ScheduleGrid
           daysInMonth={daysInMonth}

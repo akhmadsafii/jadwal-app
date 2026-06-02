@@ -21,7 +21,7 @@ export default function PublicSchedule() {
     <div className="min-h-screen pb-[140px]">
       <PublicTopBar />
 
-      <main className="pt-14">
+      <main>
         <MonthSelector onMonthChange={handleMonthChange} />
         <ScheduleGrid selectedMonth={selectedMonth} />
         <ShiftLegend />

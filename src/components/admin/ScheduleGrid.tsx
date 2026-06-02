@@ -10,11 +10,13 @@ import {
   gridCellColors,
   gridCellActiveColor,
 } from "@/data/adminData";
+import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
 
 interface ScheduleGridProps {
   staff: AdminStaff[];
   initialDate?: Date;
   initialSchedule?: Record<string, Record<string, ShiftType>>;
+  requestLockedSchedule?: Record<string, Record<string, boolean>>;
   onMonthChange?: (value: { month: number; year: number }) => void;
   onShiftChange?: (staffId: string, date: Date, shift: ShiftType) => void;
   onBulkShift?: (shift: ShiftType) => void;
@@ -38,6 +40,7 @@ export default function ScheduleGrid({
   staff,
   initialDate = new Date(),
   initialSchedule = {},
+  requestLockedSchedule = {},
   onMonthChange,
   onShiftChange,
   onBulkShift,
@@ -62,6 +65,7 @@ export default function ScheduleGrid({
   }, [initialDate]);
 
   const monthDays = useMemo(() => getMonthDays(currentDate), [currentDate]);
+  const holidays = useIndonesiaHolidays(currentDate.getFullYear());
 
   const navigateMonth = (direction: number) => {
     const newDate = new Date(currentDate);
@@ -84,6 +88,7 @@ export default function ScheduleGrid({
   };
 
   const applySelectedShift = (staffId: string, date: Date) => {
+    if (requestLockedSchedule[staffId]?.[getDateKey(date)]) return;
     setSelectedCell({ staffId, date });
     updateShift(staffId, date, selectedShift);
   };
@@ -111,6 +116,7 @@ export default function ScheduleGrid({
 
   const updateShift = (staffId: string, date: Date, shift: ShiftType) => {
     const dateKey = getDateKey(date);
+    if (requestLockedSchedule[staffId]?.[dateKey]) return;
     setSchedule((prev) => ({
       ...prev,
       [staffId]: {
@@ -127,7 +133,10 @@ export default function ScheduleGrid({
   };
 
   const fillRowWithShift = (staffId: string, shift: ShiftType) => {
-    monthDays.forEach((date) => updateShift(staffId, date, shift));
+    monthDays.forEach((date) => {
+      if (requestLockedSchedule[staffId]?.[getDateKey(date)]) return;
+      updateShift(staffId, date, shift);
+    });
   };
 
   const isToday = (date: Date): boolean => {
@@ -142,12 +151,16 @@ export default function ScheduleGrid({
   const getCellClass = (staffId: string, date: Date): string => {
     const dateKey = getDateKey(date);
     const shift = schedule[staffId]?.[dateKey];
+    const isLockedRequest = requestLockedSchedule[staffId]?.[dateKey];
     const isSelected =
       selectedCell?.staffId === staffId &&
       getDateKey(selectedCell.date) === dateKey;
 
     let baseClass =
       "h-10 flex items-center justify-center text-label-sm font-bold rounded cursor-pointer transition-all border ";
+    if (isLockedRequest) {
+      return baseClass + "border-warning bg-warning/15 text-on-surface ring-2 ring-warning/70 cursor-not-allowed";
+    }
     if (isSelected) {
       baseClass += gridCellActiveColor + " ";
     }
@@ -177,6 +190,27 @@ export default function ScheduleGrid({
       else if (shift === "MALAM") hours += 10; // Night shift is 21:00 - 07:00 = 10 hours
     });
     return hours;
+  };
+
+  const calculateShiftCounts = (staffId: string): Record<ShiftType, number> => {
+    const counts = shiftOptions.reduce((acc, shift) => {
+      acc[shift] = 0;
+      return acc;
+    }, {} as Record<ShiftType, number>);
+    const staffSchedule = schedule[staffId] || {};
+
+    monthDays.forEach((day) => {
+      const shift = staffSchedule[getDateKey(day)];
+      if (shift) {
+        counts[shift] += 1;
+      }
+    });
+
+    return counts;
+  };
+
+  const isRequestLocked = (staffId: string, date: Date) => {
+    return Boolean(requestLockedSchedule[staffId]?.[getDateKey(date)]);
   };
 
   const formatMonthYear = (date: Date): string => {
@@ -242,8 +276,12 @@ export default function ScheduleGrid({
           ))}
         </div>
         <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-on-surface-variant">
-          <span>
-            Mode cepat: klik atau drag sel untuk mengisi <b>{shiftTypeLabelMap[selectedShift]}</b>.
+              <span>
+                Mode cepat: klik atau drag sel untuk mengisi <b>{shiftTypeLabelMap[selectedShift]}</b>.
+              </span>
+          <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-1 font-bold text-on-surface">
+            <span className="h-2 w-2 rounded-full bg-warning" />
+            Dari request pegawai, dikunci
           </span>
           {selectedCell && (
             <button
@@ -264,30 +302,45 @@ export default function ScheduleGrid({
         onMouseUp={() => setIsPainting(false)}
         onTouchEnd={() => setIsPainting(false)}
       >
-        <table className="w-full border-collapse bg-white min-w-[1280px]">
+        <table className="w-full border-collapse bg-white min-w-[1560px]">
           <thead>
             <tr className="bg-surface-container-low border-b border-outline-variant">
-              <th className="w-56 sticky left-0 z-20 bg-surface-container-low p-2 text-left text-label-sm font-bold border-r border-outline-variant">
-                Staff Member
+              <th className="w-32 max-w-32 sm:w-56 sm:max-w-56 sticky left-0 z-20 bg-surface-container-low p-2 text-left text-label-sm font-bold border-r border-outline-variant">
+                <span className="sm:hidden">Staff</span>
+                <span className="hidden sm:inline">Staff Member</span>
               </th>
-              {monthDays.map((day, idx) => (
+              {monthDays.map((day, idx) => {
+                const holiday = holidays.get(getDateKey(day));
+                const isRedDate = day.getDay() === 0 || Boolean(holiday);
+                return (
+                  <th
+                    key={idx}
+                    className={`min-w-9 sm:min-w-10 p-1 sm:p-2 text-center text-[11px] sm:text-label-sm font-bold border-r border-outline-variant ${
+                      isToday(day) ? "bg-primary/5 text-primary" : isRedDate ? "bg-error-container/20 text-error" : ""
+                    }`}
+                    title={holiday?.name || (day.getDay() === 0 ? "Minggu" : "")}
+                  >
+                    {day.toLocaleDateString("id-ID", { weekday: "short" })}
+                    <br />
+                    <span className="font-normal text-[10px]">
+                      {day.toLocaleDateString("id-ID", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </span>
+                  </th>
+                );
+              })}
+              {shiftOptions.map((shift) => (
                 <th
-                  key={idx}
-                  className={`min-w-10 p-2 text-center text-label-sm font-bold border-r border-outline-variant ${
-                    isToday(day) ? "bg-primary/5 text-primary" : day.getDay() === 0 ? "bg-error-container/20 text-error" : ""
-                  }`}
+                  key={shift}
+                  className="w-12 p-2 text-center text-[10px] font-bold border-r border-outline-variant bg-surface-container"
+                  title={shiftTypeLabelMap[shift]}
                 >
-                  {day.toLocaleDateString("id-ID", { weekday: "short" })}
-                  <br />
-                  <span className="font-normal text-[10px]">
-                    {day.toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </span>
+                  {shiftTypeShortLabel[shift]}
                 </th>
               ))}
-              <th className="w-16 p-2 text-center text-label-sm font-bold">
+              <th className="w-16 p-2 text-center text-label-sm font-bold bg-surface-container">
                 Jam
               </th>
             </tr>
@@ -295,32 +348,33 @@ export default function ScheduleGrid({
           <tbody className="divide-y divide-outline-variant/50">
             {staff.map((member) => {
               const totalHours = calculateMonthlyHours(member.id);
+              const shiftCounts = calculateShiftCounts(member.id);
               return (
                 <tr key={member.id} className="group hover:bg-primary/5">
-                  <td className="sticky left-0 z-20 bg-white group-hover:bg-primary/5 p-2 border-r border-outline-variant">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full overflow-hidden border border-outline-variant flex-shrink-0">
+                  <td className="sticky left-0 z-20 w-32 max-w-32 sm:w-56 sm:max-w-56 bg-white group-hover:bg-primary/5 p-1.5 sm:p-2 border-r border-outline-variant">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <div className="hidden sm:block w-7 h-7 rounded-full overflow-hidden border border-outline-variant flex-shrink-0">
                         <img
                           alt={member.name}
                           src={member.avatarUrl}
                           className="w-full h-full object-cover"
                         />
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-label-sm font-bold truncate">
+                      <div className="min-w-0 flex-1">
+                        <p className="max-w-[76px] sm:max-w-[130px] text-[11px] sm:text-label-sm font-bold truncate">
                           {member.name}
                         </p>
-                        <p className="text-[9px] text-outline">
+                        <p className="hidden sm:block text-[9px] text-outline">
                           ID: {member.staffId}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => fillRowWithShift(member.id, selectedShift)}
-                        className="ml-auto flex-shrink-0 h-8 w-8 rounded-full bg-surface-container text-on-surface-variant hover:bg-primary hover:text-on-primary transition-colors"
+                        className="ml-auto flex-shrink-0 h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-surface-container text-on-surface-variant hover:bg-primary hover:text-on-primary transition-colors"
                         title={`Isi semua tanggal dengan ${shiftTypeLabelMap[selectedShift]}`}
                       >
-                        <span className="material-symbols-outlined text-[18px]">format_paint</span>
+                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]">format_paint</span>
                       </button>
                     </div>
                   </td>
@@ -328,8 +382,9 @@ export default function ScheduleGrid({
                     <td
                       key={dayIdx}
                       className={`p-0 border-r border-outline-variant cursor-pointer ${
-                        isToday(day) ? "bg-primary/[0.02]" : ""
+                        isToday(day) ? "bg-primary/[0.02]" : holidays.has(getDateKey(day)) || day.getDay() === 0 ? "bg-error-container/10" : ""
                       }`}
+                      title={holidays.get(getDateKey(day))?.name || ""}
                     >
                       <div
                         data-staff-id={member.id}
@@ -339,9 +394,24 @@ export default function ScheduleGrid({
                         onTouchStart={() => handleCellMouseDown(member.id, day)}
                         onTouchMove={handleCellTouchMove}
                         className={getCellClass(member.id, day)}
+                        title={isRequestLocked(member.id, day) ? "Dari pengajuan pegawai, tidak bisa diedit dari input admin" : ""}
                       >
-                        {getCellContent(member.id, day) || "-"}
+                        <span className="relative">
+                          {getCellContent(member.id, day) || "-"}
+                          {isRequestLocked(member.id, day) && (
+                            <span className="absolute -right-2 -top-2 h-2 w-2 rounded-full bg-warning" />
+                          )}
+                        </span>
                       </div>
+                    </td>
+                  ))}
+                  {shiftOptions.map((shift) => (
+                    <td
+                      key={shift}
+                      className={`p-2 text-center text-[11px] font-bold border-r border-outline-variant ${shiftCounts[shift] > 0 ? "bg-surface-container-lowest text-on-surface" : "bg-white text-outline/50"}`}
+                      title={`${shiftTypeLabelMap[shift]}: ${shiftCounts[shift]} hari`}
+                    >
+                      {shiftCounts[shift] || "-"}
                     </td>
                   ))}
                   <td className="p-2 text-center text-label-sm font-bold bg-surface-container-lowest">

@@ -1,54 +1,101 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/authContext";
+
+interface ShiftRequest {
+  id: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+  createdAt: string;
+}
+
+const statMeta = [
+  {
+    key: "pending",
+    label: "Menunggu",
+    icon: "pending_actions",
+    color: "text-tertiary",
+    surface: "bg-tertiary/10",
+  },
+  {
+    key: "approved",
+    label: "Disetujui",
+    icon: "task_alt",
+    color: "text-primary",
+    surface: "bg-primary/10",
+  },
+  {
+    key: "rejected",
+    label: "Ditolak",
+    icon: "cancel",
+    color: "text-error",
+    surface: "bg-error/10",
+  },
+  {
+    key: "thisMonth",
+    label: "Bulan Ini",
+    icon: "calendar_month",
+    color: "text-secondary",
+    surface: "bg-secondary/10",
+  },
+] as const;
 
 export default function EmployeeLeaveBalanceCards() {
   const { user, token } = useAuth();
-  const [balances, setBalances] = useState([
-    { type: "Cuti Tahunan", days: 0, color: "text-primary" },
-    { type: "Cuti Sakit", days: 0, color: "text-tertiary" },
-    { type: "Kompensasi", days: 0, color: "text-secondary" },
-  ]);
+  const [requests, setRequests] = useState<ShiftRequest[]>([]);
 
   useEffect(() => {
     if (!user?.id || !token) return;
 
-    fetch(`/api/users/${user.id}/balance`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => {
-        if (!data?.balance) return;
-        setBalances([
-          { type: "Cuti Tahunan", days: data.balance.annualLeave, color: "text-primary" },
-          { type: "Cuti Sakit", days: data.balance.sickLeave, color: "text-tertiary" },
-          { type: "Kompensasi", days: data.balance.compensation, color: "text-secondary" },
-        ]);
+    const fetchRequests = () => {
+      fetch(`/api/requests?userId=${user.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .catch(() => undefined);
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => setRequests(data?.requests || []))
+        .catch(() => setRequests([]));
+    };
+
+    fetchRequests();
+    window.addEventListener("employee-request-created", fetchRequests);
+    return () => window.removeEventListener("employee-request-created", fetchRequests);
   }, [user?.id, token]);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
+
+    return {
+      pending: requests.filter((request) => request.status === "PENDING").length,
+      approved: requests.filter((request) => request.status === "APPROVED").length,
+      rejected: requests.filter((request) => request.status === "REJECTED").length,
+      thisMonth: requests.filter((request) => {
+        const createdAt = new Date(request.createdAt);
+        return createdAt.getMonth() === month && createdAt.getFullYear() === year;
+      }).length,
+    };
+  }, [requests]);
 
   return (
     <section>
       <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
-        {balances.map((balance, index) => (
+        {statMeta.map((item) => (
           <div
-            key={index}
-            className="flex-none w-40 p-3 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm"
+            key={item.key}
+            className="flex-none w-36 p-3 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm"
           >
-            <p className="text-xs text-on-surface-variant">
-              {balance.type}
-            </p>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span
-                className={`text-lg font-bold ${balance.color}`}
-              >
-                {balance.days.toString().padStart(2, "0")}
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-on-surface-variant">{item.label}</p>
+              <span className={`material-symbols-outlined text-[18px] ${item.color}`}>
+                {item.icon}
               </span>
-              <span className="text-[10px] text-secondary">
-                hari
+            </div>
+            <div className="flex items-baseline gap-1 mt-2">
+              <span className={`text-xl font-bold ${item.color}`}>
+                {stats[item.key].toString().padStart(2, "0")}
               </span>
+              <span className="text-[10px] text-secondary">pengajuan</span>
             </div>
           </div>
         ))}

@@ -17,6 +17,7 @@ model User {
   position          String?
   avatarUrl         String?
   isActive          Boolean   @default(true)
+  sortOrder         Int       @default(0)  // Lower number = appears first, 0 = default
   leaveBalance      LeaveBalance?
   shiftRequests     ShiftRequest[]
   shiftAssignments  ShiftAssignment[]
@@ -62,6 +63,7 @@ enum RequestType {
   SHIFT_MALAM
   CUTI_TAHUNAN
   CUTI_SAKIT
+  LIBUR
   TUKAR_SHIFT
 }
 

@@ -8,7 +8,7 @@ export default function EmployeeBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 flex justify-around items-center px-2 pb-6 bg-surface border-t border-outline-variant h-20 z-50 shadow-sm">
+    <nav className="fixed bottom-0 left-0 right-0 flex justify-around items-center px-2 bg-surface border-t border-outline-variant h-20 z-50 shadow-sm pb-safe">
       {employeeNavItems.map((item, idx) => {
         const isActive = pathname === item.href;
 

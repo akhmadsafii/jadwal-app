@@ -11,13 +11,14 @@ function toStartOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-const requestTypeToShiftType: Record<string, "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "CUTI"> = {
+const requestTypeToShiftType: Record<string, "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "CUTI" | "LIBUR"> = {
   SHIFT_PAGI: "PAGI",
   SHIFT_MIDDLE: "MIDDLE",
   SHIFT_SIANG: "SIANG",
   SHIFT_MALAM: "MALAM",
   CUTI_TAHUNAN: "CUTI",
   CUTI_SAKIT: "CUTI",
+  LIBUR: "LIBUR",
 };
 
 export async function PUT(request: Request) {

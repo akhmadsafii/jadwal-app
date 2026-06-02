@@ -41,6 +41,8 @@
   --color-outline: #737686;
   --color-outline-variant: #c3c6d7;
   --color-inverse-primary: #b4c5ff;
+  --color-warning: #f59e0b;
+  --color-on-warning: #ffffff;
 
   /* Fonts */
   --font-family-headline: "Hanken Grotesk", sans-serif;
@@ -61,7 +63,8 @@
   body {
     @apply bg-background text-on-background min-h-screen pb-24;
     min-height: 100dvh;
-    padding-bottom: max(6rem, env(safe-area-inset-bottom));
+    padding-top: max(env(safe-area-inset-top), 0px);
+    padding-bottom: max(env(safe-area-inset-bottom), 6rem);
     -webkit-tap-highlight-color: transparent;
   }
 }
@@ -87,6 +90,13 @@
   }
   .stack-gap {
     gap: 0.75rem;
+  }
+  /* Safe area padding for iOS notch/home indicator */
+  .pt-safe {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
   }
 }
 
@@ -124,6 +134,18 @@
 .cell-mid { background-color: #fef3c7; color: #92400e; } /* Middle - Amber tint */
 .cell-c { background-color: #dbe1ff; color: #00174b; } /* Cuti - Blue tint */
 .cell-x { background-color: #ffdad6; color: #93000a; } /* Turun Jaga - Red tint */
+
+/* Request-based cell highlight (from approved requests) */
+.cell-request {
+  border: 2px solid #f59e0b !important;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    rgba(245, 158, 11, 0.1) 5px,
+    rgba(245, 158, 11, 0.1) 10px
+  ) !important;
+}
 
 /* Status Accent Classes */
 .status-accent-morning { border-left: 3px solid #0053db; }

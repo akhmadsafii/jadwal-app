@@ -32,8 +32,12 @@ export async function GET(request: Request) {
         position: true,
         avatarUrl: true,
         isActive: true,
+        sortOrder: true,
       },
-      orderBy: { name: "asc" },
+      orderBy: [
+        { sortOrder: "asc" },
+        { name: "asc" }
+      ],
     });
 
     return NextResponse.json({
@@ -79,6 +83,7 @@ export async function POST(request: Request) {
         position: position || null,
         avatarUrl: avatarUrl || null,
         password: hashedPassword,
+        sortOrder: 0,
         leaveBalance: normalizedRole === "EMPLOYEE"
           ? {
               create: {
@@ -98,6 +103,7 @@ export async function POST(request: Request) {
         position: true,
         avatarUrl: true,
         isActive: true,
+        sortOrder: true,
       },
     });
 
