@@ -1,10 +1,35 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { swapShiftAssignments } from "@/lib/swapShiftAssignments";
+import { getWhatsAppAdminNumbers, sendWhatsAppMessages } from "@/lib/whatsapp";
 
 function parseLocalDate(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(year, month - 1, day);
+}
+
+function formatRequestDate(date: Date) {
+  return date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  });
+}
+
+function getRequestTypeLabel(type: string, isDaySwap: boolean) {
+  if (isDaySwap) return "Tukar Hari";
+  const labels: Record<string, string> = {
+    SHIFT_PAGI: "Shift Pagi",
+    SHIFT_MIDDLE: "Shift Middle",
+    SHIFT_SIANG: "Shift Siang",
+    SHIFT_MALAM: "Shift Malam",
+    CUTI_TAHUNAN: "Cuti Tahunan",
+    CUTI_SAKIT: "Izin / Sakit",
+    LIBUR: "Libur",
+    TUKAR_SHIFT: "Tukar Shift Karyawan",
+  };
+  return labels[type] || type;
 }
 
 export async function POST(request: Request) {
@@ -104,6 +129,66 @@ export async function POST(request: Request) {
 
       return createdRequest;
     });
+
+    const [requester, targetUser, admins] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, nip: true },
+      }),
+      isEmployeeSwap && swapWithUserId
+        ? prisma.user.findUnique({
+            where: { id: swapWithUserId },
+            select: { name: true, phone: true },
+          })
+        : Promise.resolve(null),
+      prisma.user.findMany({
+        where: {
+          role: "ADMIN",
+          isActive: true,
+          phone: { not: null },
+        },
+        select: { phone: true },
+      }),
+    ]);
+    const typeLabel = getRequestTypeLabel(requestType, isDaySwap);
+    const dateLabel = isDaySwap
+      ? `${formatRequestDate(parsedStartDate)} -> ${formatRequestDate(parsedEndDate)}`
+      : formatRequestDate(parsedStartDate);
+    const adminNumbers = [
+      ...admins.map((admin) => admin.phone),
+      ...getWhatsAppAdminNumbers(),
+    ];
+    console.info("WhatsApp admin notification targets:", {
+      adminUsersWithPhone: admins.length,
+      fallbackAdminNumbers: getWhatsAppAdminNumbers().length,
+      totalTargets: adminNumbers.length,
+    });
+    await sendWhatsAppMessages(
+      [
+        ...adminNumbers.map((adminNumber) => ({
+          number: adminNumber,
+          message: [
+            "Notifikasi Pengajuan Jadwal",
+            `Pengajuan baru diterima dari ${requester?.name || "Pegawai"} (${requester?.nip || "-"})`,
+            `Jenis pengajuan: ${typeLabel}`,
+            `Tanggal: ${dateLabel}`,
+            isEmployeeSwap ? "Status: telah diproses otomatis oleh sistem." : "Status: menunggu persetujuan admin.",
+          ].join("\n"),
+        })),
+        ...(targetUser && isEmployeeSwap
+          ? [{
+              number: targetUser.phone,
+              message: [
+                "Notifikasi Tukar Shift",
+                `${requester?.name || "Pegawai"} telah menukar shift dengan Anda.`,
+                `Tanggal: ${dateLabel}`,
+                "Perubahan jadwal telah diproses otomatis oleh sistem.",
+                "Silakan cek aplikasi untuk melihat jadwal terbaru.",
+              ].join("\n"),
+            }]
+          : []),
+      ]
+    );
 
     return NextResponse.json({
       success: true,

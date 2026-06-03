@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { swapShiftAssignments } from "@/lib/swapShiftAssignments";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -10,6 +11,30 @@ function addDays(date: Date, days: number) {
 
 function toStartOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function formatRequestDate(date: Date) {
+  return date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  });
+}
+
+function getRequestTypeLabel(type: string, hasEndDate: boolean, hasSwapUser: boolean) {
+  if (type === "TUKAR_SHIFT" && hasEndDate && !hasSwapUser) return "Tukar Hari";
+  const labels: Record<string, string> = {
+    SHIFT_PAGI: "Shift Pagi",
+    SHIFT_MIDDLE: "Shift Middle",
+    SHIFT_SIANG: "Shift Siang",
+    SHIFT_MALAM: "Shift Malam",
+    CUTI_TAHUNAN: "Cuti Tahunan",
+    CUTI_SAKIT: "Izin / Sakit",
+    LIBUR: "Libur",
+    TUKAR_SHIFT: "Tukar Shift Karyawan",
+  };
+  return labels[type] || type;
 }
 
 const requestTypeToShiftType: Record<string, "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "CUTI" | "SAKIT" | "LIBUR"> = {
@@ -147,6 +172,7 @@ export async function PUT(request: Request) {
             select: {
               name: true,
               nip: true,
+              phone: true,
             },
           },
         },
@@ -204,6 +230,32 @@ export async function PUT(request: Request) {
 
       return updated;
     });
+
+    if (updatedRequest.status === "APPROVED" || updatedRequest.status === "REJECTED") {
+      const typeLabel = getRequestTypeLabel(
+        updatedRequest.type,
+        Boolean(updatedRequest.endDate),
+        Boolean(updatedRequest.swapWithUserId)
+      );
+      const dateLabel = updatedRequest.endDate
+        ? `${formatRequestDate(updatedRequest.startDate)} -> ${formatRequestDate(updatedRequest.endDate)}`
+        : formatRequestDate(updatedRequest.startDate);
+      const statusLabel = updatedRequest.status === "APPROVED" ? "DISETUJUI" : "DITOLAK";
+
+      await sendWhatsAppMessage({
+        number: updatedRequest.user.phone,
+        message: [
+          "Notifikasi Pengajuan Jadwal",
+          `Pengajuan Anda telah ${statusLabel}.`,
+          `Jenis pengajuan: ${typeLabel}`,
+          `Tanggal: ${dateLabel}`,
+          updatedRequest.adminNotes ? `Catatan admin: ${updatedRequest.adminNotes}` : "",
+          "Silakan cek aplikasi untuk melihat detail pengajuan.",
+        ].filter(Boolean).join("\n"),
+      }).catch((error) => {
+        console.error("WhatsApp notification error:", error);
+      });
+    }
 
     return NextResponse.json({
       success: true,

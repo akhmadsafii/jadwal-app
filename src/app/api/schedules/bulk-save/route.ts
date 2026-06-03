@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { sendWhatsAppMessages } from "@/lib/whatsapp";
 
 type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 
@@ -24,6 +25,26 @@ function toDateKey(date: Date) {
 function getScheduleKey(userId: string, dateKey: string) {
   return `${userId}-${dateKey}`;
 }
+
+function formatScheduleDate(dateKey: string) {
+  return parseDateKey(dateKey).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+const shiftLabels: Record<ShiftType | "NONE", string> = {
+  PAGI: "Pagi",
+  MIDDLE: "Middle",
+  SIANG: "Siang",
+  MALAM: "Malam",
+  LIBUR: "Libur",
+  CUTI: "Cuti",
+  SAKIT: "Izin / Sakit",
+  TURUN: "Turun Jaga",
+  NONE: "Belum ada jadwal",
+};
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -133,6 +154,10 @@ export async function POST(request: Request) {
         assignment.shiftType,
       ])
     );
+    const changedSchedules = editableSchedules.filter((item) => {
+      const previousShift = existingMap.get(getScheduleKey(item.userId, item.date));
+      return previousShift !== item.shiftType;
+    });
 
     const leaveDeltaByUser = new Map<string, number>();
     editableSchedules.forEach((item) => {
@@ -209,6 +234,48 @@ export async function POST(request: Request) {
 
       return savedSchedules;
     });
+
+    if (changedSchedules.length > 0) {
+      const changedUserIds = [...new Set(changedSchedules.map((item) => item.userId))];
+      const users = await prisma.user.findMany({
+        where: {
+          id: { in: changedUserIds },
+          phone: { not: null },
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      });
+      const changesByUser = new Map<string, ScheduleItem[]>();
+      changedSchedules.forEach((item) => {
+        changesByUser.set(item.userId, [...(changesByUser.get(item.userId) || []), item]);
+      });
+
+      await sendWhatsAppMessages(
+        users.map((user) => {
+          const userChanges = (changesByUser.get(user.id) || [])
+            .sort((a, b) => a.date.localeCompare(b.date));
+          const detailLines = userChanges.slice(0, 8).map((item) => {
+            const previousShift = existingMap.get(getScheduleKey(item.userId, item.date)) || "NONE";
+            return `${formatScheduleDate(item.date)}: ${shiftLabels[previousShift]} menjadi ${shiftLabels[item.shiftType]}`;
+          });
+          const remainingCount = userChanges.length - detailLines.length;
+
+          return {
+            number: user.phone,
+            message: [
+              "Notifikasi Perubahan Jadwal",
+              `Yth. ${user.name}, jadwal Anda telah diperbarui oleh admin.`,
+              ...detailLines,
+              remainingCount > 0 ? `Dan ${remainingCount} perubahan jadwal lainnya.` : "",
+              "Silakan cek aplikasi untuk melihat detail jadwal terbaru.",
+            ].filter(Boolean).join("\n"),
+          };
+        })
+      );
+    }
 
     return NextResponse.json({
       success: true,
