@@ -23,6 +23,7 @@ interface ExportButtonProps {
   year: number;
   employees: Employee[];
   monthlyStats?: MonthlyStats;
+  activeStaff?: number;
 }
 
 const shiftTypeToCode: Record<string, string> = {
@@ -72,7 +73,17 @@ function setCellStyle(worksheet: XLSX.WorkSheet, cellRef: string, style: XLSX.Ce
   worksheet[cellRef].s = style;
 }
 
-export default function ExportButton({ month, year, employees, monthlyStats }: ExportButtonProps) {
+type FreezableWorksheet = XLSX.WorkSheet & {
+  "!freeze"?: {
+    xSplit: number;
+    ySplit: number;
+    topLeftCell: string;
+    activePane: string;
+    state: string;
+  };
+};
+
+export default function ExportButton({ month, year, employees, monthlyStats, activeStaff }: ExportButtonProps) {
   const monthNames = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
     "Juli", "Agustus", "September", "Oktober", "November", "Desember",
@@ -147,9 +158,9 @@ export default function ExportButton({ month, year, employees, monthlyStats }: E
     data.push([]);
     data.push(["RINGKASAN"]);
     data.push(["Total Staff", `${sortedEmployees.length} orang`]);
-    data.push(["Total Hari Kerja", `${monthlyStats?.totalWorkDays || 0} hari`]);
+    data.push(["Staff Berdinas", `${activeStaff ?? sortedEmployees.length} orang`]);
+    data.push(["Total Hari Dinas", `${monthlyStats?.totalWorkDays || 0} hari`]);
     data.push(["Persentase Kehadiran", `${monthlyStats?.attendanceRate || 0}%`]);
-    data.push(["Total Jam Lembur", `${monthlyStats?.overtimeHours || 0} jam`]);
     data.push([]);
     data.push(["KODE SHIFT"]);
     legendRows.forEach((row) => data.push(row));
@@ -169,7 +180,6 @@ export default function ExportButton({ month, year, employees, monthlyStats }: E
     const spacerCol = dayEndCol + 1;
     const totalStartCol = spacerCol + 1;
     const lastColIndex = totalStartCol + totalColumns.length - 1;
-    const lastCol = XLSX.utils.encode_col(lastColIndex);
     const scheduleStartRow = 9;
     const scheduleEndRow = scheduleStartRow + sortedEmployees.length * 2 - 1;
     const countTitleRow = scheduleEndRow + 2;
@@ -241,7 +251,13 @@ export default function ExportButton({ month, year, employees, monthlyStats }: E
       { hpt: 18 },
       ...Array.from({ length: sortedEmployees.length * 2 }, (_, index) => ({ hpt: index % 2 === 0 ? 20 : 16 })),
     ];
-    worksheet["!freeze"] = { xSplit: 3, ySplit: 8, topLeftCell: "D9", activePane: "bottomRight", state: "frozen" } as any;
+    (worksheet as FreezableWorksheet)["!freeze"] = {
+      xSplit: 3,
+      ySplit: 8,
+      topLeftCell: "D9",
+      activePane: "bottomRight",
+      state: "frozen",
+    };
     const colors = {
       green: "3F7548",
       lightGreen: "D4E8D7",
@@ -335,10 +351,7 @@ export default function ExportButton({ month, year, employees, monthlyStats }: E
         });
       }
 
-      const scheduleByDay = getScheduleByDay(employee);
       for (let day = 1; day <= daysInMonth; day++) {
-        const shiftType = scheduleByDay.get(day) || "LIBUR";
-        const code = shiftTypeToCode[shiftType] || "L";
         const isSpecialDate = day === 1 || new Date(year, month - 1, day).getDay() === 0;
         setCellStyle(worksheet, `${XLSX.utils.encode_col(dayStartCol + day - 1)}${row}`, {
           alignment: { horizontal: "center", vertical: "center" },

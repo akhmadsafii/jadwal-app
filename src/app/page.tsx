@@ -22,6 +22,8 @@ interface ScheduleResponse {
   shiftCounts: Record<string, number>;
 }
 
+const workingShiftTypes = new Set(["PAGI", "MIDDLE", "SIANG", "MALAM"]);
+
 export default function Home() {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -35,7 +37,7 @@ export default function Home() {
   const shiftCounts = scheduleData?.shiftCounts || {};
   const totalStaff = scheduleData?.employees.length || 0;
   const activeStaff = scheduleData?.employees.filter((employee) =>
-    employee.schedule.some((assignment) => assignment.shiftType !== "LIBUR")
+    employee.schedule.some((assignment) => workingShiftTypes.has(assignment.shiftType))
   ).length || 0;
 
   const handleMonthChange = useCallback((month: number, year: number) => {
@@ -73,9 +75,9 @@ export default function Home() {
           isLoading={isLoading}
         />
 
-        {/* Daily Statistics */}
+        {/* Monthly Shift Statistics */}
         <section className="px-container-margin py-4">
-          <h2 className="text-sm font-semibold text-on-surface-variant mb-3">Statistik Shift Hari Ini</h2>
+          <h2 className="text-sm font-semibold text-on-surface-variant mb-3">Statistik Shift Bulan Ini</h2>
           <div className="grid grid-cols-4 gap-3">
             <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-center">
               <div className="w-8 h-8 mx-auto bg-primary/10 rounded-lg flex items-center justify-center mb-2">
@@ -114,7 +116,7 @@ export default function Home() {
           <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
             <div className="grid grid-cols-2">
               <div className="p-4 border-r border-b border-outline-variant">
-                <p className="text-[10px] text-on-surface-variant uppercase">Total Jam Kerja</p>
+                <p className="text-[10px] text-on-surface-variant uppercase">Total Hari Dinas</p>
                 <p className="text-xl font-bold text-on-surface">{monthlyStats?.totalWorkDays || 0} Hari</p>
               </div>
               <div className="p-4 border-b border-outline-variant">
@@ -122,7 +124,7 @@ export default function Home() {
                 <p className="text-xl font-bold text-on-surface">{monthlyStats?.attendanceRate || 0}%</p>
               </div>
               <div className="p-4 border-r border-outline-variant">
-                <p className="text-[10px] text-on-surface-variant uppercase">Staff Standby</p>
+                <p className="text-[10px] text-on-surface-variant uppercase">Staff Berdinas</p>
                 <p className="text-xl font-bold text-on-surface">{activeStaff} Org</p>
               </div>
               <div className="p-4">

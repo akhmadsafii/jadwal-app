@@ -7,7 +7,6 @@ import MonthSelector from "@/components/public/MonthSelector";
 import AdminScheduleGrid from "@/components/admin/AdminScheduleGrid";
 import ShiftLegend from "@/components/public/ShiftLegend";
 import ExportButton from "@/components/admin/ExportButton";
-import { getDaysInMonth } from "@/data/publicData";
 
 interface Employee {
   id: string;
@@ -29,6 +28,8 @@ interface ScheduleData {
   };
   shiftCounts: Record<string, number>;
 }
+
+const workingShiftTypes = new Set(["PAGI", "MIDDLE", "SIANG", "MALAM"]);
 
 export default function AdminRosterPage() {
   const now = new Date();
@@ -71,12 +72,14 @@ export default function AdminRosterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
   const employees = scheduleData?.employees || [];
   const monthlyStats = scheduleData?.monthlyStats;
   const shiftCounts = scheduleData?.shiftCounts || {};
 
-  const onDuty = employees.length;
+  const totalStaff = employees.length;
+  const activeStaff = employees.filter((employee) =>
+    employee.schedule.some((assignment) => workingShiftTypes.has(assignment.shiftType))
+  ).length;
 
   return (
     <div className="min-h-screen flex flex-col pb-24">
@@ -91,6 +94,7 @@ export default function AdminRosterPage() {
             year={selectedYear}
             employees={employees}
             monthlyStats={monthlyStats}
+            activeStaff={activeStaff}
           />
         </div>
 
@@ -109,9 +113,9 @@ export default function AdminRosterPage() {
           employees={employees}
         />
 
-        {/* Daily Statistics */}
+        {/* Monthly Shift Statistics */}
         <section className="px-container-margin py-4">
-          <h2 className="text-sm font-semibold text-on-surface-variant mb-3">Statistik Shift</h2>
+          <h2 className="text-sm font-semibold text-on-surface-variant mb-3">Statistik Shift Bulan Ini</h2>
           {loading ? (
             <div className="grid grid-cols-4 gap-3">
               {[1, 2, 3, 4].map((i) => (
@@ -127,15 +131,15 @@ export default function AdminRosterPage() {
                 <div className="w-8 h-8 mx-auto bg-primary/10 rounded-lg flex items-center justify-center mb-2">
                   <span className="material-symbols-outlined text-primary text-[18px]">wb_sunny</span>
                 </div>
-                <p className="text-lg font-bold text-primary">{onDuty}</p>
-                <p className="text-[10px] text-on-surface-variant">Total Staff</p>
+                <p className="text-lg font-bold text-primary">{shiftCounts.PAGI || 0}</p>
+                <p className="text-[10px] text-on-surface-variant">Pagi</p>
               </div>
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-center">
                 <div className="w-8 h-8 mx-auto bg-tertiary/10 rounded-lg flex items-center justify-center mb-2">
                   <span className="material-symbols-outlined text-tertiary text-[18px]">schedule</span>
                 </div>
-                <p className="text-lg font-bold text-tertiary">{shiftCounts.PAGI || 0}</p>
-                <p className="text-[10px] text-on-surface-variant">Pagi</p>
+                <p className="text-lg font-bold text-tertiary">{shiftCounts.MIDDLE || 0}</p>
+                <p className="text-[10px] text-on-surface-variant">Middle</p>
               </div>
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-center">
                 <div className="w-8 h-8 mx-auto bg-tertiary/10 rounded-lg flex items-center justify-center mb-2">
@@ -175,7 +179,7 @@ export default function AdminRosterPage() {
             <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
               <div className="grid grid-cols-2">
                 <div className="p-4 border-r border-b border-outline-variant">
-                  <p className="text-[10px] text-on-surface-variant uppercase">Total Hari Kerja</p>
+                  <p className="text-[10px] text-on-surface-variant uppercase">Total Hari Dinas</p>
                   <p className="text-xl font-bold text-on-surface">{monthlyStats?.totalWorkDays || 0} Hari</p>
                 </div>
                 <div className="p-4 border-b border-outline-variant">
@@ -183,12 +187,12 @@ export default function AdminRosterPage() {
                   <p className="text-xl font-bold text-on-surface">{monthlyStats?.attendanceRate || 0}%</p>
                 </div>
                 <div className="p-4 border-r border-outline-variant">
-                  <p className="text-[10px] text-on-surface-variant uppercase">Total Jam Lembur</p>
-                  <p className="text-xl font-bold text-on-surface">{monthlyStats?.overtimeHours || 0} Jam</p>
+                  <p className="text-[10px] text-on-surface-variant uppercase">Staff Berdinas</p>
+                  <p className="text-xl font-bold text-on-surface">{activeStaff} Org</p>
                 </div>
                 <div className="p-4">
                   <p className="text-[10px] text-on-surface-variant uppercase">Total Staff</p>
-                  <p className="text-xl font-bold text-on-surface">{onDuty} Org</p>
+                  <p className="text-xl font-bold text-on-surface">{totalStaff} Org</p>
                 </div>
               </div>
             </div>

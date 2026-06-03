@@ -8,6 +8,25 @@ function toDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+const shiftTypes = ["PAGI", "MIDDLE", "SIANG", "MALAM", "LIBUR", "CUTI", "SAKIT", "TURUN"] as const;
+type ShiftTypeKey = (typeof shiftTypes)[number];
+
+function createShiftCounts() {
+  return {
+    PAGI: 0,
+    MIDDLE: 0,
+    SIANG: 0,
+    MALAM: 0,
+    LIBUR: 0,
+    CUTI: 0,
+    SAKIT: 0,
+    TURUN: 0,
+  };
+}
+
+const workingShiftTypes = new Set<string>(["PAGI", "MIDDLE", "SIANG", "MALAM"]);
+const absenceShiftTypes = new Set<string>(["CUTI", "SAKIT"]);
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -19,6 +38,9 @@ export async function GET(request: Request) {
     const now = new Date();
     const targetMonth = month ? parseInt(month) : now.getMonth() + 1;
     const targetYear = year ? parseInt(year) : now.getFullYear();
+    const monthStart = new Date(targetYear, targetMonth - 1, 1);
+    const monthEnd = new Date(targetYear, targetMonth, 1);
+    const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
 
     // If userId is provided, return single user schedule
     if (userId) {
@@ -26,8 +48,8 @@ export async function GET(request: Request) {
         where: {
           userId,
           date: {
-            gte: new Date(targetYear, targetMonth - 1, 1),
-            lt: new Date(targetYear, targetMonth, 1),
+            gte: monthStart,
+            lt: monthEnd,
           },
         },
         orderBy: { date: "asc" },
@@ -42,8 +64,8 @@ export async function GET(request: Request) {
             { swapWithUserId: userId },
           ],
           startDate: {
-            gte: new Date(targetYear, targetMonth - 1, 1),
-            lt: new Date(targetYear, targetMonth, 1),
+            gte: monthStart,
+            lt: monthEnd,
           },
         },
       });
@@ -128,8 +150,8 @@ export async function GET(request: Request) {
         shiftAssignments: {
           where: {
             date: {
-              gte: new Date(targetYear, targetMonth - 1, 1),
-              lt: new Date(targetYear, targetMonth, 1),
+              gte: monthStart,
+              lt: monthEnd,
             },
           },
           orderBy: { date: "asc" },
@@ -138,8 +160,8 @@ export async function GET(request: Request) {
           where: {
             status: "APPROVED",
             startDate: {
-              gte: new Date(targetYear, targetMonth - 1, 1),
-              lt: new Date(targetYear, targetMonth, 1),
+              gte: monthStart,
+              lt: monthEnd,
             },
           },
         },
@@ -156,8 +178,8 @@ export async function GET(request: Request) {
       where: {
         status: { in: visibleRequestStatuses },
         startDate: {
-          gte: new Date(targetYear, targetMonth - 1, 1),
-          lt: new Date(targetYear, targetMonth, 1),
+          gte: monthStart,
+          lt: monthEnd,
         },
         OR: [
           { userId: { in: employeeIds } },
@@ -166,31 +188,10 @@ export async function GET(request: Request) {
       },
     });
 
-    // Get monthly stats
+    // Get manually maintained values that cannot be derived from assignments.
     const monthlyStats = await prisma.monthlyStats.findFirst({
       where: { month: targetMonth, year: targetYear },
     });
-
-    // Calculate shift distribution from saved assignments.
-    const shiftCounts = {
-      PAGI: 0,
-      MIDDLE: 0,
-      SIANG: 0,
-      MALAM: 0,
-      LIBUR: 0,
-      CUTI: 0,
-      SAKIT: 0,
-      TURUN: 0,
-    };
-    employees.forEach((emp) => {
-      emp.shiftAssignments.forEach((shift) => {
-        shiftCounts[shift.shiftType] += 1;
-      });
-    });
-
-    const totalAssignments = Object.values(shiftCounts).reduce((sum, count) => sum + count, 0);
-    const percentage = (count: number) =>
-      totalAssignments > 0 ? Math.round((count / totalAssignments) * 100) : 0;
 
     // Map shift type from request type
     const requestTypeToShiftType: Record<string, string> = {
@@ -203,26 +204,24 @@ export async function GET(request: Request) {
       LIBUR: "LIBUR",
     };
 
-    return NextResponse.json({
-      success: true,
-      employees: employees.map((emp) => {
-        // Combine schedule assignments with request-based shifts
-        const scheduleEntries: {
-          date: Date;
-          dateKey: string;
-          shiftType: string;
-          fromRequest: boolean;
-          requestStatus?: string;
-          requestId?: string;
-          requestType?: string;
-        }[] = [];
-        const requestDates = new Map<string, string>();
-        const requestMeta = new Map<string, { requestId: string; requestStatus: string; requestType: string }>();
-        const lockedRequestDates = new Set<string>();
+    const responseEmployees = employees.map((emp) => {
+      // Combine schedule assignments with request-based shifts
+      const scheduleEntries: {
+        date: Date;
+        dateKey: string;
+        shiftType: string;
+        fromRequest: boolean;
+        requestStatus?: string;
+        requestId?: string;
+        requestType?: string;
+      }[] = [];
+      const requestDates = new Map<string, string>();
+      const requestMeta = new Map<string, { requestId: string; requestStatus: string; requestType: string }>();
+      const lockedRequestDates = new Set<string>();
 
-        approvedRequests
-          .filter((req) => req.userId === emp.id || req.swapWithUserId === emp.id)
-          .forEach((req) => {
+      approvedRequests
+        .filter((req) => req.userId === emp.id || req.swapWithUserId === emp.id)
+        .forEach((req) => {
           const start = new Date(req.startDate);
           const end = req.endDate ? new Date(req.endDate) : start;
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -238,25 +237,25 @@ export async function GET(request: Request) {
           }
         });
 
-        // Add regular assignments
-        emp.shiftAssignments.forEach((s) => {
-          const dateKey = toDateKey(s.date);
-          scheduleEntries.push({
-            date: s.date,
-            dateKey,
-            shiftType: requestDates.get(dateKey) || s.shiftType,
-            fromRequest: requestMeta.has(dateKey),
-            requestStatus: requestMeta.get(dateKey)?.requestStatus,
-            requestId: requestMeta.get(dateKey)?.requestId,
-            requestType: requestMeta.get(dateKey)?.requestType,
-          });
+      // Add regular assignments
+      emp.shiftAssignments.forEach((s) => {
+        const dateKey = toDateKey(s.date);
+        scheduleEntries.push({
+          date: s.date,
+          dateKey,
+          shiftType: requestDates.get(dateKey) || s.shiftType,
+          fromRequest: requestMeta.has(dateKey),
+          requestStatus: requestMeta.get(dateKey)?.requestStatus,
+          requestId: requestMeta.get(dateKey)?.requestId,
+          requestType: requestMeta.get(dateKey)?.requestType,
         });
+      });
 
-        // Add approved request shifts (only if not already in schedule)
-        const existingDates = new Set(emp.shiftAssignments.map((s) => toDateKey(s.date)));
-        approvedRequests
-          .filter((req) => req.userId === emp.id)
-          .forEach((req) => {
+      // Add approved request shifts (only if not already in schedule)
+      const existingDates = new Set(emp.shiftAssignments.map((s) => toDateKey(s.date)));
+      approvedRequests
+        .filter((req) => req.userId === emp.id)
+        .forEach((req) => {
           const start = new Date(req.startDate);
           const end = req.endDate ? new Date(req.endDate) : start;
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -278,24 +277,56 @@ export async function GET(request: Request) {
           }
         });
 
-        return {
-          id: emp.id,
-          name: emp.name,
-          nip: emp.nip,
-          sortOrder: emp.sortOrder,
-          position: emp.position,
-          avatarUrl: emp.avatarUrl,
-          schedule: scheduleEntries,
-          leaveBalance: emp.leaveBalance,
-        };
-      }),
-      monthlyStats: monthlyStats || {
-        month: targetMonth,
-        year: targetYear,
-        totalWorkDays: 22,
-        attendanceRate: 0,
-        overtimeHours: 0,
-      },
+      return {
+        id: emp.id,
+        name: emp.name,
+        nip: emp.nip,
+        sortOrder: emp.sortOrder,
+        position: emp.position,
+        avatarUrl: emp.avatarUrl,
+        schedule: scheduleEntries,
+        leaveBalance: emp.leaveBalance,
+      };
+    });
+
+    const shiftCounts = createShiftCounts();
+    let totalWorkDays = 0;
+    let absenceDays = 0;
+
+    responseEmployees.forEach((emp) => {
+      const scheduleByDate = new Map(emp.schedule.map((assignment) => [assignment.dateKey, assignment.shiftType]));
+
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const dateKey = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const shiftType = scheduleByDate.get(dateKey) || "LIBUR";
+
+        if (shiftTypes.includes(shiftType as ShiftTypeKey)) {
+          shiftCounts[shiftType as ShiftTypeKey] += 1;
+        }
+        if (workingShiftTypes.has(shiftType)) totalWorkDays += 1;
+        if (absenceShiftTypes.has(shiftType)) absenceDays += 1;
+      }
+    });
+
+    const totalAssignments = responseEmployees.length * daysInMonth;
+    const attendanceBase = totalWorkDays + absenceDays;
+    const attendanceRate = attendanceBase > 0
+      ? Number(((totalWorkDays / attendanceBase) * 100).toFixed(1))
+      : 0;
+    const calculatedMonthlyStats = {
+      month: targetMonth,
+      year: targetYear,
+      totalWorkDays,
+      attendanceRate,
+      overtimeHours: monthlyStats?.overtimeHours || 0,
+    };
+    const percentage = (count: number) =>
+      totalAssignments > 0 ? Math.round((count / totalAssignments) * 100) : 0;
+
+    return NextResponse.json({
+      success: true,
+      employees: responseEmployees,
+      monthlyStats: calculatedMonthlyStats,
       shiftCounts,
       totalAssignments,
       shiftDistribution: [
