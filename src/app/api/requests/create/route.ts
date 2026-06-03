@@ -10,6 +10,7 @@ function parseLocalDate(dateString: string) {
 export async function POST(request: Request) {
   try {
     const { userId, type, startDate, endDate, description, swapWithUserId } = await request.json();
+    const requestType = type === "TUKAR_HARI" ? "TUKAR_SHIFT" : type;
 
     if (!userId || !type || !startDate) {
       return NextResponse.json(
@@ -19,13 +20,13 @@ export async function POST(request: Request) {
     }
 
     const parsedStartDate = parseLocalDate(startDate);
-    const parsedEndDate = type === "TUKAR_SHIFT"
-      ? parsedStartDate
-      : endDate
-        ? parseLocalDate(endDate)
-        : parsedStartDate;
+    const parsedEndDate = endDate ? parseLocalDate(endDate) : parsedStartDate;
+    const rangeStart = parsedStartDate <= parsedEndDate ? parsedStartDate : parsedEndDate;
+    const rangeEnd = parsedStartDate <= parsedEndDate ? parsedEndDate : parsedStartDate;
+    const isEmployeeSwap = requestType === "TUKAR_SHIFT" && Boolean(swapWithUserId);
+    const isDaySwap = requestType === "TUKAR_SHIFT" && !swapWithUserId;
 
-    if (type === "TUKAR_SHIFT") {
+    if (isEmployeeSwap) {
       if (!swapWithUserId) {
         return NextResponse.json(
           { error: "Pilih karyawan tujuan untuk tukar shift" },
@@ -57,22 +58,29 @@ export async function POST(request: Request) {
       }
     }
 
+    if (isDaySwap && parsedStartDate.getTime() === parsedEndDate.getTime()) {
+      return NextResponse.json(
+        { error: "Pilih dua tanggal yang berbeda untuk tukar hari" },
+        { status: 400 }
+      );
+    }
+
     const existingPendingRequest = await prisma.shiftRequest.findFirst({
       where: {
         userId,
-        type,
-        status: type === "TUKAR_SHIFT" ? "APPROVED" : "PENDING",
-        startDate: { lte: parsedEndDate },
+        type: requestType,
+        status: isEmployeeSwap ? "APPROVED" : "PENDING",
+        startDate: { lte: rangeEnd },
         OR: [
-          { endDate: null, startDate: { gte: parsedStartDate } },
-          { endDate: { gte: parsedStartDate } },
+          { endDate: null, startDate: { gte: rangeStart } },
+          { endDate: { gte: rangeStart } },
         ],
       },
     });
 
     if (existingPendingRequest) {
       return NextResponse.json(
-        { error: type === "TUKAR_SHIFT" ? "Tukar shift pada tanggal ini sudah pernah diproses" : "Pengajuan yang sama masih menunggu approval admin" },
+        { error: requestType === "TUKAR_SHIFT" ? "Pengajuan tukar pada tanggal ini sudah ada" : "Pengajuan yang sama masih menunggu approval admin" },
         { status: 409 }
       );
     }
@@ -81,16 +89,16 @@ export async function POST(request: Request) {
       const createdRequest = await tx.shiftRequest.create({
         data: {
           userId,
-          type,
+          type: requestType,
           startDate: parsedStartDate,
-          endDate: type === "TUKAR_SHIFT" ? null : endDate ? parsedEndDate : null,
-          swapWithUserId: type === "TUKAR_SHIFT" ? swapWithUserId : null,
+          endDate: isEmployeeSwap ? null : endDate ? parsedEndDate : null,
+          swapWithUserId: isEmployeeSwap ? swapWithUserId : null,
           description,
-          status: type === "TUKAR_SHIFT" ? "APPROVED" : "PENDING",
+          status: isEmployeeSwap ? "APPROVED" : "PENDING",
         },
       });
 
-      if (type === "TUKAR_SHIFT") {
+      if (isEmployeeSwap) {
         await swapShiftAssignments(tx, userId, swapWithUserId, parsedStartDate);
       }
 
@@ -99,7 +107,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      autoApproved: type === "TUKAR_SHIFT",
+      autoApproved: isEmployeeSwap,
       request: shiftRequest,
     });
   } catch (error) {

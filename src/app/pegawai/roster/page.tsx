@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import EmployeeTopBar from "@/components/pegawai/EmployeeTopBar";
 import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import { useAuth } from "@/lib/authContext";
-import { getDateKeyFromApi, getLocalDateKey } from "@/lib/dateKeys";
+import { dateKeyToLocalDate, getDateKeyFromApi, getLocalDateKey } from "@/lib/dateKeys";
 import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
 
 type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 type FilterKey = "ALL" | "WORK" | "OFF" | "NIGHT";
-type RequestType = "SHIFT_PAGI" | "SHIFT_MIDDLE" | "SHIFT_SIANG" | "SHIFT_MALAM" | "CUTI_TAHUNAN" | "CUTI_SAKIT" | "TUKAR_SHIFT";
+type RequestType = "SHIFT_PAGI" | "SHIFT_MIDDLE" | "SHIFT_SIANG" | "SHIFT_MALAM" | "CUTI_TAHUNAN" | "CUTI_SAKIT" | "TUKAR_HARI" | "TUKAR_SHIFT";
 type RequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
 
 interface ShiftAssignment {
@@ -143,7 +143,8 @@ const requestTypeOptions: { value: RequestType; label: string }[] = [
   { value: "SHIFT_MALAM", label: "Shift Malam (21:00 - 07:00)" },
   { value: "CUTI_TAHUNAN", label: "Ajukan Cuti" },
   { value: "CUTI_SAKIT", label: "Izin / Sakit" },
-  { value: "TUKAR_SHIFT", label: "Tukar Shift" },
+  { value: "TUKAR_HARI", label: "Tukar Hari" },
+  { value: "TUKAR_SHIFT", label: "Tukar Shift Karyawan" },
 ];
 
 const requestTypeLabels: Record<RequestType, string> = {
@@ -153,8 +154,14 @@ const requestTypeLabels: Record<RequestType, string> = {
   SHIFT_MALAM: "Shift Malam",
   CUTI_TAHUNAN: "Cuti Tahunan",
   CUTI_SAKIT: "Izin / Sakit",
-  TUKAR_SHIFT: "Tukar Shift",
+  TUKAR_HARI: "Tukar Hari",
+  TUKAR_SHIFT: "Tukar Shift Karyawan",
 };
+
+function getRequestTypeLabel(request: ShiftRequest) {
+  if (request.type === "TUKAR_SHIFT" && request.endDate) return "Tukar Hari";
+  return requestTypeLabels[request.type] || request.type;
+}
 
 const requestStatusMeta: Record<RequestStatus, {
   label: string;
@@ -222,6 +229,9 @@ function getRequestForDay(requests: ShiftRequest[], dateKey: string) {
     .filter((request) => {
       const startKey = apiDateToKey(request.startDate);
       const endKey = request.endDate ? apiDateToKey(request.endDate) : startKey;
+      if (request.type === "TUKAR_SHIFT" && request.endDate) {
+        return dateKey === startKey || dateKey === endKey;
+      }
       return dateKey >= startKey && dateKey <= endKey;
     })
     .sort((a, b) => {
@@ -245,6 +255,7 @@ export default function PegawaiRosterPage() {
   const [activeFilter, setActiveFilter] = useState<FilterKey>("ALL");
   const [selectedDay, setSelectedDay] = useState<DaySchedule | null>(null);
   const [requestType, setRequestType] = useState<RequestType>("CUTI_TAHUNAN");
+  const [swapDayDate, setSwapDayDate] = useState(getLocalDateKey(new Date()));
   const [swapWithUserId, setSwapWithUserId] = useState("");
   const [requestDescription, setRequestDescription] = useState("");
   const [submitStatus, setSubmitStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -279,7 +290,8 @@ export default function PegawaiRosterPage() {
   const nextWorkShift = days.find((day) => day.dateKey >= todayKey && isWorkShift(day.shiftType));
   const selectedRequest = selectedDay ? getRequestForDay(requests, selectedDay.dateKey) : undefined;
   const selectedRequestLocked = selectedRequest?.status === "PENDING" || selectedRequest?.status === "APPROVED";
-  const isSwapRequest = requestType === "TUKAR_SHIFT";
+  const isDaySwapRequest = requestType === "TUKAR_HARI";
+  const isEmployeeSwapRequest = requestType === "TUKAR_SHIFT";
 
   const summary = useMemo(() => {
     return days.reduce(
@@ -376,8 +388,11 @@ export default function PegawaiRosterPage() {
       CUTI: "CUTI_TAHUNAN",
     };
     const defaultType = defaultTypeByShift[day.shiftType] || "CUTI_TAHUNAN";
+    const nextDate = new Date(day.date);
+    nextDate.setDate(nextDate.getDate() + 1);
     setSelectedDay(day);
     setRequestType(defaultType);
+    setSwapDayDate(getLocalDateKey(nextDate));
     setSwapWithUserId((current) => current || employees[0]?.id || "");
     setRequestDescription("");
     setSubmitStatus("idle");
@@ -395,15 +410,22 @@ export default function PegawaiRosterPage() {
       return;
     }
 
-    if (isSwapRequest && !swapWithUserId) {
+    if (isEmployeeSwapRequest && !swapWithUserId) {
+      setSubmitStatus("error");
+      return;
+    }
+
+    if (isDaySwapRequest && selectedDay.dateKey === swapDayDate) {
       setSubmitStatus("error");
       return;
     }
 
     const swapTarget = employees.find((employee) => employee.id === swapWithUserId);
     const confirmed = confirm(
-      isSwapRequest
+      isEmployeeSwapRequest
         ? `Tukar shift tanggal ${formatFullDate(selectedDay.date)} dengan ${swapTarget?.name || "karyawan tujuan"}? Jadwal akan langsung berubah.`
+        : isDaySwapRequest
+          ? `Ajukan tukar hari ${formatFullDate(selectedDay.date)} dengan ${formatFullDate(dateKeyToLocalDate(swapDayDate))}? Jadwal berubah setelah disetujui admin.`
         : `Kirim pengajuan ${requestTypeLabels[requestType]} untuk tanggal ${formatFullDate(selectedDay.date)}?`
     );
 
@@ -419,8 +441,8 @@ export default function PegawaiRosterPage() {
           userId: user.id,
           type: requestType,
           startDate: selectedDay.dateKey,
-          endDate: selectedDay.dateKey,
-          swapWithUserId: isSwapRequest ? swapWithUserId : undefined,
+          endDate: isDaySwapRequest ? swapDayDate : selectedDay.dateKey,
+          swapWithUserId: isEmployeeSwapRequest ? swapWithUserId : undefined,
           description: requestDescription || `Pengajuan dari jadwal tanggal ${formatFullDate(selectedDay.date)}`,
         }),
       });
@@ -664,7 +686,7 @@ export default function PegawaiRosterPage() {
                   <p className="text-sm font-bold">{requestStatusMeta[selectedRequest.status].label}</p>
                 </div>
                 <p className="text-xs mt-1 opacity-80">
-                  {requestTypeLabels[selectedRequest.type]} untuk tanggal ini sudah tercatat.
+                  {getRequestTypeLabel(selectedRequest)} untuk tanggal ini sudah tercatat.
                 </p>
               </div>
             )}
@@ -684,7 +706,16 @@ export default function PegawaiRosterPage() {
                 <div className="relative mt-1">
                   <select
                     value={requestType}
-                    onChange={(event) => setRequestType(event.target.value as RequestType)}
+                    onChange={(event) => {
+                      const value = event.target.value as RequestType;
+                      setRequestType(value);
+                      if (value === "TUKAR_SHIFT") setSwapDayDate(selectedDay.dateKey);
+                      if (value === "TUKAR_HARI" && swapDayDate === selectedDay.dateKey) {
+                        const nextDate = new Date(selectedDay.date);
+                        nextDate.setDate(nextDate.getDate() + 1);
+                        setSwapDayDate(getLocalDateKey(nextDate));
+                      }
+                    }}
                     className="w-full h-11 rounded-lg border border-outline-variant bg-surface px-3 pr-10 text-sm font-medium outline-none focus:border-primary"
                     disabled={submitStatus === "submitting"}
                   >
@@ -698,7 +729,25 @@ export default function PegawaiRosterPage() {
                 </div>
               </label>
 
-              {isSwapRequest && (
+              {isDaySwapRequest && (
+                <label className="block">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant">Tanggal tujuan</span>
+                  <div className="relative mt-1">
+                    <input
+                      type="date"
+                      value={swapDayDate}
+                      onChange={(event) => setSwapDayDate(event.target.value)}
+                      className="w-full h-11 rounded-lg border border-outline-variant bg-surface px-3 text-sm font-medium outline-none focus:border-primary"
+                      disabled={submitStatus === "submitting"}
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-on-surface-variant">
+                    Jadwal tanggal ini akan ditukar dengan tanggal yang sedang dipilih setelah approval admin.
+                  </p>
+                </label>
+              )}
+
+              {isEmployeeSwapRequest && (
                 <label className="block">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant">Tukar dengan karyawan</span>
                   <div className="relative mt-1">
@@ -751,13 +800,15 @@ export default function PegawaiRosterPage() {
                 }`}
               >
                 {submitStatus === "submitting"
-                  ? (isSwapRequest ? "Memproses tukar..." : "Mengirim...")
+                  ? (isEmployeeSwapRequest ? "Memproses tukar..." : "Mengirim...")
                   : submitStatus === "success"
-                    ? (isSwapRequest ? "Shift berhasil ditukar" : "Pengajuan terkirim")
+                    ? (isEmployeeSwapRequest ? "Shift berhasil ditukar" : "Pengajuan terkirim")
                     : submitStatus === "error"
                       ? "Gagal, coba lagi"
-                      : isSwapRequest
+                      : isEmployeeSwapRequest
                         ? "Tukar Shift Sekarang"
+                        : isDaySwapRequest
+                          ? "Ajukan Tukar Hari"
                         : "Kirim Pengajuan"}
               </button>
             </div>

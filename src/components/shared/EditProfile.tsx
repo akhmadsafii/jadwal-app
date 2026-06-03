@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/authContext";
 import { useRouter } from "next/navigation";
 
@@ -9,6 +9,7 @@ interface ProfileFormData {
   email: string;
   phone: string;
   position: string;
+  avatarUrl: string;
 }
 
 interface EditProfileProps {
@@ -16,16 +17,39 @@ interface EditProfileProps {
 }
 
 export default function EditProfile({ onBack }: EditProfileProps) {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, updateUser } = useAuth();
   const router = useRouter();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [formData, setFormData] = useState<ProfileFormData>({
     name: user?.name || "",
     email: user?.email || "",
-    phone: "",
+    phone: user?.phone || "",
     position: user?.position || "",
+    avatarUrl: user?.avatarUrl || "",
   });
+
+  useEffect(() => {
+    if (!token) return;
+
+    fetch("/api/profile", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (!data?.user) return;
+        setFormData({
+          name: data.user.name || "",
+          email: data.user.email || "",
+          phone: data.user.phone || "",
+          position: data.user.position || "",
+          avatarUrl: data.user.avatarUrl || "",
+        });
+        updateUser(data.user);
+      })
+      .catch(() => undefined);
+  }, [token, updateUser]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -50,6 +74,7 @@ export default function EditProfile({ onBack }: EditProfileProps) {
       const result = await response.json();
 
       if (response.ok) {
+        if (result.user) updateUser(result.user);
         setStatus("success");
         setMessage("Profil berhasil diperbarui!");
         setTimeout(() => {
@@ -122,15 +147,20 @@ export default function EditProfile({ onBack }: EditProfileProps) {
       <section className="flex flex-col items-center mb-10">
         <div className="relative group">
           <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-sm">
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+            {formData.avatarUrl || user?.avatarUrl ? (
+              <img src={formData.avatarUrl || user?.avatarUrl || ""} alt={formData.name || user?.name || "Profil"} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
                 <span className="material-symbols-outlined text-[48px] text-on-surface-variant">person</span>
               </div>
             )}
           </div>
-          <button className="absolute bottom-0 right-0 bg-primary-container p-2.5 rounded-full text-on-primary-container shadow-md border-2 border-surface active:scale-95 transition-transform">
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.focus()}
+            className="absolute bottom-0 right-0 bg-primary-container p-2.5 rounded-full text-on-primary-container shadow-md border-2 border-surface active:scale-95 transition-transform"
+            aria-label="Edit foto profil"
+          >
             <span className="material-symbols-outlined !text-[20px]">edit</span>
           </button>
         </div>
@@ -144,7 +174,7 @@ export default function EditProfile({ onBack }: EditProfileProps) {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-1.5">
           <label className="text-label-sm text-on-surface-variant block ml-1" htmlFor="name">
-            Nama Lengkap
+            Nama
           </label>
           <input
             id="name"
@@ -158,13 +188,30 @@ export default function EditProfile({ onBack }: EditProfileProps) {
 
         <div className="space-y-1.5">
           <label className="text-label-sm text-on-surface-variant block ml-1" htmlFor="nip">
-            NIP / ID Number
+            NIP / Username
           </label>
           <div className="relative">
             <input
               id="nip"
               type="text"
               value={user?.nip || ""}
+              disabled
+              readOnly
+              className="w-full h-12 px-4 rounded-xl border border-outline-variant bg-surface-variant/30 text-on-surface-variant/70 cursor-not-allowed pr-10"
+            />
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant/40 !text-[18px]">lock</span>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-label-sm text-on-surface-variant block ml-1" htmlFor="role">
+            Role
+          </label>
+          <div className="relative">
+            <input
+              id="role"
+              type="text"
+              value={user?.role === "ADMIN" ? "Admin" : "Pegawai"}
               disabled
               readOnly
               className="w-full h-12 px-4 rounded-xl border border-outline-variant bg-surface-variant/30 text-on-surface-variant/70 cursor-not-allowed pr-10"
@@ -189,7 +236,7 @@ export default function EditProfile({ onBack }: EditProfileProps) {
 
         <div className="space-y-1.5">
           <label className="text-label-sm text-on-surface-variant block ml-1" htmlFor="phone">
-            No. Telepon
+            No. WA
           </label>
           <input
             id="phone"
@@ -197,7 +244,7 @@ export default function EditProfile({ onBack }: EditProfileProps) {
             type="tel"
             value={formData.phone}
             onChange={handleChange}
-            placeholder="+62 xxx-xxxx-xxxx"
+            placeholder="08xx atau +62xx"
             className="w-full h-12 px-4 rounded-xl border border-outline-variant bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
           />
         </div>
@@ -206,24 +253,30 @@ export default function EditProfile({ onBack }: EditProfileProps) {
           <label className="text-label-sm text-on-surface-variant block ml-1" htmlFor="position">
             Jabatan / Posisi
           </label>
-          <div className="relative">
-            <select
-              id="position"
-              name="position"
-              value={formData.position}
-              onChange={handleChange}
-              className="w-full h-12 pl-4 pr-10 rounded-xl border border-outline-variant bg-surface-container-lowest appearance-none focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-            >
-              <option value="">Pilih Jabatan</option>
-              <option value="Apoteker">Apoteker</option>
-              <option value="Apoteker Supervisor">Apoteker Supervisor</option>
-              <option value="Staff Farmasi">Staff Farmasi</option>
-              <option value="Staff Gudang">Staff Gudang</option>
-              <option value="Kasir Farmasi">Kasir Farmasi</option>
-              <option value="Administrator">Administrator</option>
-            </select>
-            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
-          </div>
+          <input
+            id="position"
+            name="position"
+            type="text"
+            value={formData.position}
+            onChange={handleChange}
+            className="w-full h-12 px-4 rounded-xl border border-outline-variant bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-label-sm text-on-surface-variant block ml-1" htmlFor="avatarUrl">
+            Foto Profil URL
+          </label>
+          <input
+            ref={avatarInputRef}
+            id="avatarUrl"
+            name="avatarUrl"
+            type="url"
+            value={formData.avatarUrl}
+            onChange={handleChange}
+            placeholder="https://..."
+            className="w-full h-12 px-4 rounded-xl border border-outline-variant bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+          />
         </div>
 
         {/* Actions */}

@@ -12,6 +12,7 @@ interface UserItem {
   nip: string;
   name: string;
   email?: string | null;
+  phone?: string | null;
   role: Role;
   position?: string | null;
   avatarUrl?: string | null;
@@ -29,6 +30,7 @@ interface UserFormState {
   nip: string;
   name: string;
   email: string;
+  phone: string;
   role: Role;
   position: string;
   avatarUrl: string;
@@ -41,6 +43,7 @@ const emptyForm: UserFormState = {
   nip: "",
   name: "",
   email: "",
+  phone: "",
   role: "EMPLOYEE",
   position: "",
   avatarUrl: "",
@@ -117,6 +120,7 @@ export default function AdminUsersPage() {
       nip: user.nip,
       name: user.name,
       email: user.email || "",
+      phone: user.phone || "",
       role: user.role,
       position: user.position || "",
       avatarUrl: user.avatarUrl || "",
@@ -175,6 +179,7 @@ export default function AdminUsersPage() {
       nip: form.nip.trim(),
       name: form.name.trim(),
       email: form.email.trim(),
+      phone: form.phone.trim(),
       role: form.role,
       position: form.position.trim(),
       avatarUrl: form.avatarUrl.trim(),
@@ -329,6 +334,16 @@ export default function AdminUsersPage() {
                   <p className="text-xs text-on-surface-variant truncate">{user.position || "-"}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1">
                     <p className="text-[10px] text-outline">NIP. {user.nip}</p>
+                    {user.phone && (
+                      <a
+                        href={`https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "62")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700"
+                      >
+                        WA {user.phone}
+                      </a>
+                    )}
                     {user.role === "EMPLOYEE" && (
                       <span className="rounded bg-surface-container px-2 py-0.5 text-[10px] font-bold text-primary">
                         Cuti {user.leaveBalance?.annualLeave ?? 0}
@@ -428,6 +443,13 @@ export default function AdminUsersPage() {
                   <span className="text-[10px] uppercase text-on-surface-variant">Email</span>
                   <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="mt-1 w-full h-10 rounded-lg border border-outline-variant bg-surface px-3 text-sm outline-none focus:border-primary" />
                 </label>
+                <label className="block">
+                  <span className="text-[10px] uppercase text-on-surface-variant">No. WA</span>
+                  <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="08xx atau +62xx" className="mt-1 w-full h-10 rounded-lg border border-outline-variant bg-surface px-3 text-sm outline-none focus:border-primary" />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-[10px] uppercase text-on-surface-variant">Posisi</span>
                   <input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className="mt-1 w-full h-10 rounded-lg border border-outline-variant bg-surface px-3 text-sm outline-none focus:border-primary" />

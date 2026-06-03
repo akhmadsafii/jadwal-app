@@ -22,13 +22,23 @@ export default function ApprovalPage() {
       TUKAR_SHIFT: "SHIFT_SWAP",
     };
 
-    const date = formatDateKey(getDateKeyFromApi(request.startDate), {
+    const startDate = formatDateKey(getDateKeyFromApi(request.startDate), {
       day: "numeric",
       month: "short",
       year: "numeric",
     });
+    const endDate = request.endDate
+      ? formatDateKey(getDateKeyFromApi(request.endDate), {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      : "";
+    const isOwnDaySwap = request.type === "TUKAR_SHIFT" && !request.swapWithUserId && request.endDate;
     const description = request.type === "TUKAR_SHIFT"
-      ? `Tukar shift dengan ${request.swapWithUser?.name || "karyawan tujuan"}`
+      ? isOwnDaySwap
+        ? request.description || `Tukar hari ${startDate} dengan ${endDate}`
+        : `Tukar shift dengan ${request.swapWithUser?.name || "karyawan tujuan"}`
       : request.description || request.type.replaceAll("_", " ");
 
     return {
@@ -38,7 +48,7 @@ export default function ApprovalPage() {
       avatarUrl: request.user?.avatarUrl || "",
       category: categoryByType[request.type] || "TIME_OFF",
       description,
-      date,
+      date: isOwnDaySwap ? `${startDate} - ${endDate}` : startDate,
       status: request.status,
     };
   };

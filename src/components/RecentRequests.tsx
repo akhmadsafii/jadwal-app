@@ -44,6 +44,14 @@ const requestIconBg: Record<string, string> = {
   TUKAR_SHIFT: "bg-surface-dim",
 };
 
+function getRequestLabel(request: any) {
+  if (request.type === "TUKAR_SHIFT" && !request.swapWithUserId && request.endDate) {
+    return "Tukar Hari";
+  }
+
+  return requestTypeLabels[request.type] || request.type;
+}
+
 export default function RecentRequests() {
   const { user, token } = useAuth();
   const [requests, setRequests] = useState<any[]>([]);
@@ -88,7 +96,7 @@ export default function RecentRequests() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-body-md font-semibold truncate">
-                {requestTypeLabels[request.type]}
+                {getRequestLabel(request)}
               </p>
               <p className="font-label text-label-sm text-secondary">
                 {request.endDate

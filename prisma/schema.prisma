@@ -12,6 +12,7 @@ model User {
   nip               String    @unique
   name              String
   email             String?   @unique
+  phone             String?
   password          String
   role              Role      @default(EMPLOYEE)
   position          String?

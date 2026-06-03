@@ -7,6 +7,7 @@ export type EmployeeShiftType =
   | "CUTI_TAHUNAN"    // Cuti Tahunan
   | "CUTI_SAKIT"      // Izin / Sakit
   | "LIBUR"           // Ajukan Libur (bukan cuti)
+  | "TUKAR_HARI"      // Tukar hari sendiri, butuh approval admin
   | "TUKAR_SHIFT";    // Tukar Shift
 
 export type EmployeeRequestStatus = "pending" | "approved" | "expired" | "rejected";
@@ -43,6 +44,7 @@ export const shiftTimeRanges: Record<EmployeeShiftType, string> = {
   CUTI_TAHUNAN: "Libur",
   CUTI_SAKIT: "Izin / sakit",
   LIBUR: "Libur",
+  TUKAR_HARI: "-",
   TUKAR_SHIFT: "-",
 };
 
@@ -55,6 +57,7 @@ export const shiftCodes: Record<EmployeeShiftType, string> = {
   CUTI_TAHUNAN: "L",
   CUTI_SAKIT: "CS",
   LIBUR: "L",
+  TUKAR_HARI: "-",
   TUKAR_SHIFT: "-",
 };
 
@@ -109,7 +112,8 @@ export const employeeRequestTypeLabels: Record<EmployeeShiftType, string> = {
   CUTI_TAHUNAN: "Cuti Tahunan",
   CUTI_SAKIT: "Izin / Sakit",
   LIBUR: "Ajukan Libur",
-  TUKAR_SHIFT: "Tukar Shift",
+  TUKAR_HARI: "Tukar Hari",
+  TUKAR_SHIFT: "Tukar Shift Karyawan",
 };
 
 // Request Status Labels
@@ -137,6 +141,7 @@ export const employeeRequestIcons: Record<EmployeeShiftType, string> = {
   CUTI_TAHUNAN: "beach_access",
   CUTI_SAKIT: "medical_services",
   LIBUR: "weekend",
+  TUKAR_HARI: "swap_calls",
   TUKAR_SHIFT: "swap_horiz",
 };
 
@@ -149,7 +154,8 @@ export const employeeRequestTypeOptions = [
   { value: "LIBUR", label: "Ajukan Libur (bukan cuti)" },
   { value: "CUTI_TAHUNAN", label: "Cuti Tahunan" },
   { value: "CUTI_SAKIT", label: "Izin / Sakit" },
-  { value: "TUKAR_SHIFT", label: "Tukar Shift" },
+  { value: "TUKAR_HARI", label: "Tukar Hari" },
+  { value: "TUKAR_SHIFT", label: "Tukar Shift Karyawan" },
 ];
 
 // Navigation items for logged-in employee (without Profile - accessed via avatar menu)

@@ -8,7 +8,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { nip, name, email, role, position, avatarUrl, isActive, sortOrder, password } = await request.json();
+    const { nip, name, email, phone, role, position, avatarUrl, isActive, sortOrder, password } = await request.json();
 
     if (!nip || !name || !role) {
       return NextResponse.json(
@@ -29,6 +29,7 @@ export async function PUT(
       nip,
       name,
       email: email || null,
+      phone: phone || null,
       role: normalizedRole,
       position: position || null,
       avatarUrl: avatarUrl || null,
@@ -48,6 +49,7 @@ export async function PUT(
         nip: true,
         name: true,
         email: true,
+        phone: true,
         role: true,
         position: true,
         avatarUrl: true,

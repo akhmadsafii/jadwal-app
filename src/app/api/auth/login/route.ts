@@ -63,6 +63,8 @@ export async function POST(request: Request) {
         nip: user.nip,
         name: user.name,
         role: user.role,
+        email: user.email,
+        phone: user.phone,
         position: user.position,
         avatarUrl: user.avatarUrl,
       },

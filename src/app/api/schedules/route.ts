@@ -8,6 +8,27 @@ function toDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getRequestDates(request: { type: string; startDate: Date; endDate: Date | null; swapWithUserId: string | null }) {
+  const start = new Date(request.startDate);
+  const end = request.endDate ? new Date(request.endDate) : start;
+
+  if (request.type === "TUKAR_SHIFT" && !request.swapWithUserId && request.endDate) {
+    return [start, end];
+  }
+
+  const dates: Date[] = [];
+  for (let date = start; date <= end; date = addDays(date, 1)) {
+    dates.push(date);
+  }
+  return dates;
+}
+
 const shiftTypes = ["PAGI", "MIDDLE", "SIANG", "MALAM", "LIBUR", "CUTI", "SAKIT", "TURUN"] as const;
 type ShiftTypeKey = (typeof shiftTypes)[number];
 
@@ -84,16 +105,14 @@ export async function GET(request: Request) {
       const requestDates = new Map<string, string>();
       const lockedRequestDates = new Set<string>();
       approvedRequests.forEach((req) => {
-        const start = new Date(req.startDate);
-        const end = req.endDate ? new Date(req.endDate) : start;
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateKey = toDateKey(new Date(d));
+        getRequestDates(req).forEach((date) => {
+          const dateKey = toDateKey(date);
           if (req.userId === userId || req.swapWithUserId === userId) {
             lockedRequestDates.add(dateKey);
           }
           const shiftType = requestTypeToShiftType[req.type];
           if (shiftType && req.userId === userId) requestDates.set(dateKey, shiftType);
-        }
+        });
       });
 
       // Build schedule entries
@@ -113,22 +132,20 @@ export async function GET(request: Request) {
       // Add approved request shifts (only if not already in schedule)
       const existingDates = new Set(userSchedule.map((s) => toDateKey(s.date)));
       approvedRequests.forEach((req) => {
-        const start = new Date(req.startDate);
-        const end = req.endDate ? new Date(req.endDate) : start;
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateKey = toDateKey(new Date(d));
+        getRequestDates(req).forEach((date) => {
+          const dateKey = toDateKey(date);
           if (!existingDates.has(dateKey)) {
             const shiftType = requestDates.get(dateKey);
             if (shiftType) {
               scheduleEntries.push({
-                date: new Date(d),
+                date,
                 dateKey,
                 shiftType,
                 fromRequest: true,
               });
             }
           }
-        }
+        });
       });
 
       return NextResponse.json({
@@ -222,10 +239,8 @@ export async function GET(request: Request) {
       approvedRequests
         .filter((req) => req.userId === emp.id || req.swapWithUserId === emp.id)
         .forEach((req) => {
-          const start = new Date(req.startDate);
-          const end = req.endDate ? new Date(req.endDate) : start;
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateKey = toDateKey(new Date(d));
+          getRequestDates(req).forEach((date) => {
+            const dateKey = toDateKey(date);
             if (req.status === "APPROVED") lockedRequestDates.add(dateKey);
             requestMeta.set(dateKey, {
               requestId: req.id,
@@ -234,7 +249,7 @@ export async function GET(request: Request) {
             });
             const shiftType = requestTypeToShiftType[req.type];
             if (shiftType && req.userId === emp.id) requestDates.set(dateKey, shiftType);
-          }
+          });
         });
 
       // Add regular assignments
@@ -256,15 +271,13 @@ export async function GET(request: Request) {
       approvedRequests
         .filter((req) => req.userId === emp.id)
         .forEach((req) => {
-          const start = new Date(req.startDate);
-          const end = req.endDate ? new Date(req.endDate) : start;
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateKey = toDateKey(new Date(d));
+          getRequestDates(req).forEach((date) => {
+            const dateKey = toDateKey(date);
             if (!existingDates.has(dateKey)) {
               const shiftType = requestDates.get(dateKey);
               if (shiftType) {
                 scheduleEntries.push({
-                  date: new Date(d),
+                  date,
                   dateKey,
                   shiftType,
                   fromRequest: true,
@@ -274,7 +287,7 @@ export async function GET(request: Request) {
                 });
               }
             }
-          }
+          });
         });
 
       return {

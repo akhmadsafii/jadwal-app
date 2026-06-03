@@ -28,6 +28,7 @@ export async function GET(request: Request) {
         nip: true,
         name: true,
         email: true,
+        phone: true,
         role: true,
         position: true,
         avatarUrl: true,
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { nip, name, email, role, position, avatarUrl, password } = await request.json();
+    const { nip, name, email, phone, role, position, avatarUrl, password } = await request.json();
 
     if (!nip || !name || !role) {
       return NextResponse.json(
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
         nip,
         name,
         email: email || null,
+        phone: phone || null,
         role: normalizedRole as "ADMIN" | "EMPLOYEE",
         position: position || null,
         avatarUrl: avatarUrl || null,
@@ -106,6 +108,7 @@ export async function POST(request: Request) {
         nip: true,
         name: true,
         email: true,
+        phone: true,
         role: true,
         position: true,
         avatarUrl: true,

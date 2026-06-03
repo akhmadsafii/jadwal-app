@@ -83,6 +83,38 @@ async function adjustAnnualLeaveForShiftChanges(
   });
 }
 
+async function swapOwnDayAssignments(
+  tx: any,
+  userId: string,
+  firstDate: Date,
+  secondDate: Date
+) {
+  const [firstAssignment, secondAssignment] = await Promise.all([
+    tx.shiftAssignment.findUnique({
+      where: { userId_date: { userId, date: firstDate } },
+    }),
+    tx.shiftAssignment.findUnique({
+      where: { userId_date: { userId, date: secondDate } },
+    }),
+  ]);
+
+  const firstShift = firstAssignment?.shiftType || "LIBUR";
+  const secondShift = secondAssignment?.shiftType || "LIBUR";
+
+  await Promise.all([
+    tx.shiftAssignment.upsert({
+      where: { userId_date: { userId, date: firstDate } },
+      update: { shiftType: secondShift },
+      create: { userId, date: firstDate, shiftType: secondShift },
+    }),
+    tx.shiftAssignment.upsert({
+      where: { userId_date: { userId, date: secondDate } },
+      update: { shiftType: firstShift },
+      create: { userId, date: secondDate, shiftType: firstShift },
+    }),
+  ]);
+}
+
 export async function PUT(request: Request) {
   try {
     const { requestId, status, adminNotes } = await request.json();
@@ -128,6 +160,15 @@ export async function PUT(request: Request) {
           updated.userId,
           updated.swapWithUserId,
           toStartOfDay(updated.startDate)
+        );
+      }
+
+      if (isNewApproval && updated.type === "TUKAR_SHIFT" && !updated.swapWithUserId && updated.endDate) {
+        await swapOwnDayAssignments(
+          tx,
+          updated.userId,
+          toStartOfDay(updated.startDate),
+          toStartOfDay(updated.endDate)
         );
       }
 

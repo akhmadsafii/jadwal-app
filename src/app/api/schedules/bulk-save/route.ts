@@ -25,6 +25,29 @@ function getScheduleKey(userId: string, dateKey: string) {
   return `${userId}-${dateKey}`;
 }
 
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getRequestDates(request: { type: string; startDate: Date; endDate: Date | null; swapWithUserId: string | null }) {
+  const start = new Date(request.startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = request.endDate ? new Date(request.endDate) : new Date(request.startDate);
+  end.setHours(0, 0, 0, 0);
+
+  if (request.type === "TUKAR_SHIFT" && !request.swapWithUserId && request.endDate) {
+    return [start, end];
+  }
+
+  const dates: Date[] = [];
+  for (let date = start; date <= end; date = addDays(date, 1)) {
+    dates.push(date);
+  }
+  return dates;
+}
+
 export async function POST(request: Request) {
   try {
     const { schedules } = await request.json() as { schedules: ScheduleItem[] };
@@ -68,6 +91,7 @@ export async function POST(request: Request) {
         }],
       },
       select: {
+        type: true,
         userId: true,
         swapWithUserId: true,
         startDate: true,
@@ -76,16 +100,12 @@ export async function POST(request: Request) {
     });
 
     approvedRequests.forEach((request) => {
-      const start = new Date(request.startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = request.endDate ? new Date(request.endDate) : new Date(request.startDate);
-      end.setHours(0, 0, 0, 0);
-      for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+      getRequestDates(request).forEach((date) => {
         requestedDates.add(`${request.userId}-${toDateKey(date)}`);
         if (request.swapWithUserId) {
           requestedDates.add(`${request.swapWithUserId}-${toDateKey(date)}`);
         }
-      }
+      });
     });
 
     const editableSchedules = schedules.filter((item) => {

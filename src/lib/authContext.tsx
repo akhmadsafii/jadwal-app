@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, useEffect, ReactNode } from "react";
 
 type Role = "ADMIN" | "EMPLOYEE";
 
@@ -12,6 +12,7 @@ interface User {
   position?: string;
   avatarUrl?: string;
   email?: string;
+  phone?: string;
 }
 
 interface AuthContextType {
@@ -22,6 +23,7 @@ interface AuthContextType {
   login: (nip: string, password: string, isAdmin: boolean) => Promise<{ success: boolean; error?: string; isDefaultPassword?: boolean }>;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -87,6 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUser = useCallback((nextUser: User) => {
+    setUser(nextUser);
+    localStorage.setItem("user", JSON.stringify(nextUser));
+  }, []);
+
   const changePassword = async (currentPassword: string, newPassword: string) => {
     if (!token || !user) return { success: false, error: "Tidak ada sesi aktif" };
 
@@ -119,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, isDefaultPassword, login, logout, changePassword }}
+      value={{ user, token, isLoading, isDefaultPassword, login, logout, changePassword, updateUser }}
     >
       {children}
     </AuthContext.Provider>

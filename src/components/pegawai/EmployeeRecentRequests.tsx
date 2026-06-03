@@ -80,6 +80,14 @@ export default function EmployeeRecentRequests() {
     }
   };
 
+  const getRequestLabel = (request: any) => {
+    if (request.type === "TUKAR_SHIFT" && !request.swapWithUserId && request.endDate) {
+      return "Tukar Hari";
+    }
+
+    return employeeRequestTypeLabels[request.type as keyof typeof employeeRequestTypeLabels] || request.type;
+  };
+
   return (
     <section>
       <div className="flex items-center justify-between mb-2 px-1">
@@ -119,7 +127,7 @@ export default function EmployeeRecentRequests() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold truncate">
-                  {employeeRequestTypeLabels[request.type as keyof typeof employeeRequestTypeLabels] || request.type}
+                  {getRequestLabel(request)}
                 </p>
                 <p className="text-[10px] text-secondary">
                   {endDate ? `${startDate} - ${endDate}` : startDate}

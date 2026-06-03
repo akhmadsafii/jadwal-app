@@ -157,6 +157,12 @@ function getAssignmentKey(assignment: ShiftAssignment) {
   return assignment.dateKey || getDateKeyFromApi(assignment.date);
 }
 
+function getRequestLabel(request: ShiftRequest) {
+  if (request.type === "TUKAR_SHIFT" && !request.endDate) return requestTypeLabels[request.type];
+  if (request.type === "TUKAR_SHIFT" && request.endDate) return "Tukar Hari";
+  return requestTypeLabels[request.type] || request.type;
+}
+
 export default function PegawaiPage() {
   const { user, token } = useAuth();
   const [schedule, setSchedule] = useState<ShiftAssignment[]>([]);
@@ -441,7 +447,7 @@ export default function PegawaiPage() {
                       <span className="material-symbols-outlined text-[20px]">{status.icon}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-on-surface truncate">{requestTypeLabels[request.type] || request.type}</p>
+                      <p className="text-sm font-bold text-on-surface truncate">{getRequestLabel(request)}</p>
                       <p className="text-xs text-on-surface-variant">{formatShortDate(getDateKeyFromApi(request.startDate))}</p>
                     </div>
                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${status.color}`}>{status.label}</span>

@@ -26,7 +26,8 @@ export default function EmployeeRequestForm() {
   const [swapWithUserId, setSwapWithUserId] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const isSwapRequest = requestType === "TUKAR_SHIFT";
+  const isDaySwapRequest = requestType === "TUKAR_HARI";
+  const isEmployeeSwapRequest = requestType === "TUKAR_SHIFT";
   const selectedSwapUser = employees.find((employee) => employee.id === swapWithUserId);
 
   useEffect(() => {
@@ -64,9 +65,15 @@ export default function EmployeeRequestForm() {
       return false;
     }
 
-    if (isSwapRequest && !swapWithUserId) {
+    if (isEmployeeSwapRequest && !swapWithUserId) {
       setStatus("error");
       setMessage("Pilih karyawan tujuan untuk tukar shift.");
+      return false;
+    }
+
+    if (isDaySwapRequest && startDate === endDate) {
+      setStatus("error");
+      setMessage("Pilih dua tanggal yang berbeda untuk tukar hari.");
       return false;
     }
 
@@ -93,10 +100,10 @@ export default function EmployeeRequestForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId,
-          type: requestType,
+          type: isDaySwapRequest ? "TUKAR_HARI" : requestType,
           startDate,
-          endDate: isSwapRequest ? startDate : endDate,
-          swapWithUserId: isSwapRequest ? swapWithUserId : undefined,
+          endDate: isEmployeeSwapRequest ? startDate : endDate,
+          swapWithUserId: isEmployeeSwapRequest ? swapWithUserId : undefined,
           description,
         }),
       });
@@ -107,8 +114,8 @@ export default function EmployeeRequestForm() {
         setSubmittedRequest({
           type: requestType,
           startDate,
-          endDate: isSwapRequest ? startDate : endDate,
-          swapWithUserName: isSwapRequest ? selectedSwapUser?.name : undefined,
+          endDate: isEmployeeSwapRequest ? startDate : endDate,
+          swapWithUserName: isEmployeeSwapRequest ? selectedSwapUser?.name : undefined,
           autoApproved: Boolean(data.autoApproved),
         });
         setDescription("");
@@ -174,11 +181,13 @@ export default function EmployeeRequestForm() {
 
   const buttonText =
     status === "submitting"
-      ? (isSwapRequest ? "Memproses..." : "Mengirim...")
+      ? (isEmployeeSwapRequest ? "Memproses..." : "Mengirim...")
       : status === "error"
         ? "Coba Kirim Lagi"
-        : isSwapRequest
+        : isEmployeeSwapRequest
           ? "Tukar Shift Sekarang"
+          : isDaySwapRequest
+            ? "Ajukan Tukar Hari"
           : "Kirim Pengajuan";
 
   return (
@@ -194,10 +203,10 @@ export default function EmployeeRequestForm() {
       )}
 
       <div className="space-y-3">
-        <div className={`grid gap-3 ${isSwapRequest ? "grid-cols-1" : "grid-cols-2"}`}>
+        <div className={`grid gap-3 ${isEmployeeSwapRequest ? "grid-cols-1" : "grid-cols-2"}`}>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-on-surface-variant uppercase" htmlFor="startDate">
-              {isSwapRequest ? "Tanggal Tukar Shift" : "Tanggal Mulai"}
+              {isEmployeeSwapRequest ? "Tanggal Tukar Shift" : isDaySwapRequest ? "Tanggal Asal" : "Tanggal Mulai"}
             </label>
             <div className="relative flex items-center gap-2 border border-outline-variant rounded px-2 py-2 bg-surface hover:bg-surface-container-low transition-colors">
               <span className="material-symbols-outlined text-[18px] text-secondary">calendar_today</span>
@@ -210,17 +219,17 @@ export default function EmployeeRequestForm() {
                   const value = event.target.value;
                   setStartDate(value);
                   clearFeedback();
-                  if (isSwapRequest || endDate < value) setEndDate(value);
+                  if (isEmployeeSwapRequest || (!isDaySwapRequest && endDate < value)) setEndDate(value);
                 }}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
             </div>
           </div>
 
-          {!isSwapRequest && (
+          {!isEmployeeSwapRequest && (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-on-surface-variant uppercase" htmlFor="endDate">
-              Tanggal Selesai
+              {isDaySwapRequest ? "Tanggal Tujuan" : "Tanggal Selesai"}
             </label>
             <div className="relative flex items-center gap-2 border border-outline-variant rounded px-2 py-2 bg-surface hover:bg-surface-container-low transition-colors">
               <span className="material-symbols-outlined text-[18px] text-secondary">event</span>
@@ -229,7 +238,7 @@ export default function EmployeeRequestForm() {
                 id="endDate"
                 type="date"
                 value={endDate}
-                min={startDate}
+                min={isDaySwapRequest ? undefined : startDate}
                 onChange={(event) => {
                   setEndDate(event.target.value);
                   clearFeedback();
@@ -253,6 +262,9 @@ export default function EmployeeRequestForm() {
                 const value = event.target.value;
                 setRequestType(value);
                 if (value === "TUKAR_SHIFT") setEndDate(startDate);
+                if (value === "TUKAR_HARI" && endDate === startDate) {
+                  setEndDate(getLocalDateKey(addDays(new Date(), 1)));
+                }
                 clearFeedback();
               }}
               className="w-full border border-outline-variant rounded px-3 py-2.5 bg-surface text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none appearance-none pr-10"
@@ -269,7 +281,7 @@ export default function EmployeeRequestForm() {
           </div>
         </div>
 
-        {isSwapRequest && (
+        {isEmployeeSwapRequest && (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-on-surface-variant uppercase" htmlFor="swapWithUser">
               Tukar Dengan Karyawan
@@ -299,6 +311,12 @@ export default function EmployeeRequestForm() {
             <p className="text-[11px] text-on-surface-variant">
               Shift kamu pada tanggal ini akan langsung ditukar dengan shift karyawan tujuan.
             </p>
+          </div>
+        )}
+
+        {isDaySwapRequest && (
+          <div className="rounded-lg bg-secondary-container p-3 text-xs text-on-secondary-container">
+            Pengajuan ini akan menukar isi jadwal di dua tanggal setelah disetujui admin.
           </div>
         )}
 
@@ -333,7 +351,7 @@ export default function EmployeeRequestForm() {
             <div className="flex items-start gap-3">
               <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary-container text-primary">
                 <span className="material-symbols-outlined">
-                  {isSwapRequest ? "swap_horiz" : "help_outline"}
+                  {isEmployeeSwapRequest ? "swap_horiz" : isDaySwapRequest ? "swap_calls" : "help_outline"}
                 </span>
               </div>
               <div className="min-w-0 flex-1">
@@ -355,10 +373,10 @@ export default function EmployeeRequestForm() {
                 <span className="text-on-surface-variant">Tanggal</span>
                 <span className="text-right font-bold text-on-surface">
                   {formatDisplayDate(startDate)}
-                  {!isSwapRequest && endDate !== startDate ? ` - ${formatDisplayDate(endDate)}` : ""}
+                  {!isEmployeeSwapRequest && endDate !== startDate ? ` - ${formatDisplayDate(endDate)}` : ""}
                 </span>
               </div>
-              {isSwapRequest && (
+              {isEmployeeSwapRequest && (
                 <div className="flex justify-between gap-3">
                   <span className="text-on-surface-variant">Tukar dengan</span>
                   <span className="text-right font-bold text-on-surface">
@@ -369,12 +387,14 @@ export default function EmployeeRequestForm() {
             </div>
 
             <div className={`mt-3 rounded-lg p-3 text-xs ${
-              isSwapRequest
+              isEmployeeSwapRequest
                 ? "bg-warning/15 text-on-surface"
                 : "bg-secondary-container text-on-secondary-container"
             }`}>
-              {isSwapRequest
+              {isEmployeeSwapRequest
                 ? "Tukar shift akan langsung mengubah jadwal tanpa approval admin."
+                : isDaySwapRequest
+                  ? "Tukar hari akan masuk approval admin sebelum jadwal berubah."
                 : "Pengajuan akan masuk ke daftar approval admin."}
             </div>
 
