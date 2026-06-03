@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { dayNames, getDaysInMonth } from "@/data/publicData";
 import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
+import { getDateKeyFromApi } from "@/lib/dateKeys";
 
 interface ScheduleGridProps {
   daysInMonth?: number;
@@ -15,7 +16,7 @@ interface PublicScheduleEmployee {
   id: string;
   name: string;
   nip: string;
-  schedule: { date: string; shiftType: string }[];
+  schedule: { date: string; dateKey?: string; shiftType: string }[];
 }
 
 const shiftTypeToCode: Record<string, string> = {
@@ -172,7 +173,7 @@ export default function ScheduleGrid({
               visibleEmployees.map((staff) => {
                 const scheduleByDay = new Map(
                   staff.schedule.map((assignment) => [
-                    new Date(assignment.date).getDate(),
+                    Number((assignment.dateKey || getDateKeyFromApi(assignment.date)).split("-")[2]),
                     shiftTypeToCode[assignment.shiftType] || "L",
                   ])
                 );

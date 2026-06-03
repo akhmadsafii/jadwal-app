@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { employeeRequestTypeLabels, employeeRequestStatusLabels, employeeRequestStatusColors, employeeRequestIcons } from "@/data/employeeData";
 import { useAuth } from "@/lib/authContext";
+import { formatDateKey, getDateKeyFromApi } from "@/lib/dateKeys";
 
 export default function EmployeeRecentRequests() {
   const { user, token } = useAuth();
@@ -101,9 +102,9 @@ export default function EmployeeRecentRequests() {
           </div>
         ) : requests.slice(0, 5).map((request) => {
           const status = request.status.toLowerCase();
-          const startDate = new Date(request.startDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+          const startDate = formatDateKey(getDateKeyFromApi(request.startDate), { day: "numeric", month: "short" });
           const endDate = request.endDate
-            ? new Date(request.endDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+            ? formatDateKey(getDateKeyFromApi(request.endDate), { day: "numeric", month: "short" })
             : "";
           return (
           <div

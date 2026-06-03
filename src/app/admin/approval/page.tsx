@@ -6,6 +6,7 @@ import ApprovalStats from "@/components/admin/ApprovalStats";
 import ApprovalList from "@/components/admin/ApprovalList";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import { ApprovalItem, RequestCategory } from "@/data/approvalData";
+import { formatDateKey, getDateKeyFromApi } from "@/lib/dateKeys";
 
 export default function ApprovalPage() {
   const [items, setItems] = useState<ApprovalItem[]>([]);
@@ -21,7 +22,7 @@ export default function ApprovalPage() {
       TUKAR_SHIFT: "SHIFT_SWAP",
     };
 
-    const date = new Date(request.startDate).toLocaleDateString("id-ID", {
+    const date = formatDateKey(getDateKeyFromApi(request.startDate), {
       day: "numeric",
       month: "short",
       year: "numeric",

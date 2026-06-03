@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/authContext";
+import { getLocalDateKey } from "@/lib/dateKeys";
 
 const requestTypeOptions = [
   { value: "SHIFT_PAGI", label: "Shift Pagi (07-14)" },
@@ -18,7 +19,7 @@ export default function RequestForm() {
   const [status, setStatus] = useState<
     "idle" | "submitting" | "success" | "error"
   >("idle");
-  const today = new Date().toISOString().split("T")[0];
+  const today = getLocalDateKey(new Date());
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [requestType, setRequestType] = useState(requestTypeOptions[0].value);

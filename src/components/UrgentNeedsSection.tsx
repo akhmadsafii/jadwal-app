@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatDateKey, getDateKeyFromApi } from "@/lib/dateKeys";
 
 export default function UrgentNeedsSection() {
   const [urgentNeeds, setUrgentNeeds] = useState<any[]>([]);
@@ -11,7 +12,7 @@ export default function UrgentNeedsSection() {
       .then((data) => {
         const items = (data?.requests || []).slice(0, 2).map((request: any) => ({
           id: request.id,
-          date: new Date(request.startDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }).toUpperCase(),
+          date: formatDateKey(getDateKeyFromApi(request.startDate), { day: "2-digit", month: "short" }).toUpperCase(),
           title: request.description || request.type.replaceAll("_", " "),
           icon: request.type === "CUTI_TAHUNAN" ? "event_busy" : "priority_high",
           bgColor: "bg-error-container",

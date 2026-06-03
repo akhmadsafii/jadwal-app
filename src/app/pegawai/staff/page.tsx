@@ -6,6 +6,7 @@ import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import ScheduleGrid from "@/components/public/ScheduleGrid";
 import ShiftLegend from "@/components/public/ShiftLegend";
 import { useAuth } from "@/lib/authContext";
+import { getDateKeyFromApi, getLocalDateKey } from "@/lib/dateKeys";
 
 type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 type ShiftFilter = ShiftType | "ALL";
@@ -115,14 +116,11 @@ const shiftFilters: { key: ShiftFilter; label: string; icon: string }[] = [
 ];
 
 function getDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return getLocalDateKey(date);
 }
 
 function getShiftForDate(employee: EmployeeSchedule, dateKey: string): ShiftType {
-  const assignment = employee.schedule.find((item) => (item.dateKey || item.date.split("T")[0]) === dateKey);
+  const assignment = employee.schedule.find((item) => (item.dateKey || getDateKeyFromApi(item.date)) === dateKey);
   return assignment?.shiftType || "LIBUR";
 }
 

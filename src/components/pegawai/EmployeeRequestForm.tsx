@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { employeeRequestTypeOptions } from "@/data/employeeData";
 import { useAuth } from "@/lib/authContext";
+import { addDays, formatDateKey, getLocalDateKey } from "@/lib/dateKeys";
 
 export default function EmployeeRequestForm() {
   const { user } = useAuth();
@@ -17,10 +18,8 @@ export default function EmployeeRequestForm() {
   } | null>(null);
 
   const today = new Date();
-  const [startDate, setStartDate] = useState(today.toISOString().split("T")[0]);
-  const [endDate, setEndDate] = useState(
-    new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-  );
+  const [startDate, setStartDate] = useState(getLocalDateKey(today));
+  const [endDate, setEndDate] = useState(getLocalDateKey(addDays(today, 1)));
   const [requestType, setRequestType] = useState(employeeRequestTypeOptions[0].value);
   const [description, setDescription] = useState("");
   const [employees, setEmployees] = useState<{ id: string; name: string; nip: string; isActive?: boolean }[]>([]);
@@ -44,8 +43,7 @@ export default function EmployeeRequestForm() {
   }, [user?.id]);
 
   const formatDisplayDate = (dateStr: string): string => {
-    const [year, month, day] = dateStr.split("-").map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString("id-ID", {
+    return formatDateKey(dateStr, {
       day: "numeric",
       month: "short",
       year: "numeric",

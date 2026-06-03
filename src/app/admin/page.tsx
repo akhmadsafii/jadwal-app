@@ -8,6 +8,7 @@ import ScheduleGrid from "@/components/admin/ScheduleGrid";
 import SaveActions from "@/components/admin/SaveActions";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import { ShiftType } from "@/data/adminData";
+import { getDateKeyFromApi } from "@/lib/dateKeys";
 
 interface AdminStaff {
   id: string;
@@ -87,7 +88,7 @@ export default function AdminSchedulePage() {
           lockedSchedule[employee.id] = {};
           requestMeta[employee.id] = {};
           employee.schedule?.forEach((assignment: any) => {
-            const dateKey = assignment.dateKey || assignment.date.split("T")[0];
+            const dateKey = assignment.dateKey || getDateKeyFromApi(assignment.date);
             loadedSchedule[employee.id][dateKey] = assignment.shiftType;
             if (assignment.fromRequest) {
               const isApproved = assignment.requestStatus === "APPROVED";

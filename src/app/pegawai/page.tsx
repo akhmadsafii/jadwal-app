@@ -5,6 +5,7 @@ import Link from "next/link";
 import EmployeeTopBar from "@/components/pegawai/EmployeeTopBar";
 import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import { useAuth } from "@/lib/authContext";
+import { formatDateKey, getDateKeyFromApi, getLocalDateKey } from "@/lib/dateKeys";
 
 type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 type RequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
@@ -123,10 +124,7 @@ const requestTypeLabels: Record<string, string> = {
 };
 
 function getDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return getLocalDateKey(date);
 }
 
 function formatDate(date: Date) {
@@ -139,8 +137,7 @@ function formatDate(date: Date) {
 }
 
 function formatShortDate(dateKey: string) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString("id-ID", {
+  return formatDateKey(dateKey, {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -157,7 +154,7 @@ function isWorkShift(shiftType: ShiftType) {
 }
 
 function getAssignmentKey(assignment: ShiftAssignment) {
-  return assignment.dateKey || assignment.date.split("T")[0];
+  return assignment.dateKey || getDateKeyFromApi(assignment.date);
 }
 
 export default function PegawaiPage() {
@@ -445,7 +442,7 @@ export default function PegawaiPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-on-surface truncate">{requestTypeLabels[request.type] || request.type}</p>
-                      <p className="text-xs text-on-surface-variant">{formatShortDate(request.startDate.split("T")[0])}</p>
+                      <p className="text-xs text-on-surface-variant">{formatShortDate(getDateKeyFromApi(request.startDate))}</p>
                     </div>
                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${status.color}`}>{status.label}</span>
                   </div>

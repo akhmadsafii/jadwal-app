@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/authContext";
+import { formatDateKey, getDateKeyFromApi } from "@/lib/dateKeys";
 
 const requestTypeLabels: Record<string, string> = {
   SHIFT_PAGI: "Shift Pagi",
@@ -69,9 +70,9 @@ export default function RecentRequests() {
             Belum ada pengajuan
           </div>
         ) : requests.slice(0, 5).map((request) => {
-          const startDate = new Date(request.startDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+          const startDate = formatDateKey(getDateKeyFromApi(request.startDate), { day: "numeric", month: "short" });
           const endDate = request.endDate
-            ? new Date(request.endDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+            ? formatDateKey(getDateKeyFromApi(request.endDate), { day: "numeric", month: "short" })
             : "";
           return (
           <div

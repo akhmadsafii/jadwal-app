@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import EmployeeTopBar from "@/components/pegawai/EmployeeTopBar";
 import EmployeeBottomNav from "@/components/pegawai/EmployeeBottomNav";
 import { useAuth } from "@/lib/authContext";
+import { getDateKeyFromApi, getLocalDateKey } from "@/lib/dateKeys";
 import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
 
 type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
@@ -193,14 +194,11 @@ const requestStatusMeta: Record<RequestStatus, {
 };
 
 function getDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return getLocalDateKey(date);
 }
 
 function apiDateToKey(value: string) {
-  return value.split("T")[0];
+  return getDateKeyFromApi(value);
 }
 
 function formatDay(date: Date) {
@@ -260,7 +258,7 @@ export default function PegawaiRosterPage() {
     const daysInMonth = new Date(year, month, 0).getDate();
     const scheduleByDate = new Map(
       schedule.map((assignment) => [
-        assignment.dateKey || assignment.date.split("T")[0],
+        assignment.dateKey || apiDateToKey(assignment.date),
         assignment.shiftType,
       ])
     );
@@ -569,7 +567,7 @@ export default function PegawaiRosterPage() {
                 const dayRequest = getRequestForDay(requests, item.dateKey);
 
                 // Check if this day has a schedule from an approved request
-                const scheduleEntry = schedule.find(s => (s.dateKey || s.date.split("T")[0]) === item.dateKey);
+                const scheduleEntry = schedule.find((s) => (s.dateKey || apiDateToKey(s.date)) === item.dateKey);
                 const isFromRequest = scheduleEntry?.fromRequest || false;
 
                 return (

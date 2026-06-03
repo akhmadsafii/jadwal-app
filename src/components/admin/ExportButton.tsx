@@ -2,6 +2,7 @@
 
 import * as XLSX from "xlsx-js-style";
 import { getDaysInMonth } from "@/data/publicData";
+import { getDateKeyFromApi } from "@/lib/dateKeys";
 
 interface Employee {
   id: string;
@@ -65,7 +66,7 @@ function dateKeyToDay(dateKey: string) {
 
 function assignmentDay(assignment: Employee["schedule"][number]) {
   if (assignment.dateKey) return dateKeyToDay(assignment.dateKey);
-  return new Date(assignment.date).getDate();
+  return dateKeyToDay(getDateKeyFromApi(assignment.date));
 }
 
 function setCellStyle(worksheet: XLSX.WorkSheet, cellRef: string, style: XLSX.CellObject["s"]) {
