@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { swapShiftAssignments } from "@/lib/swapShiftAssignments";
 import {
   getWhatsAppAdminNumbers,
   sendWhatsAppMessages,
@@ -126,12 +125,32 @@ export async function POST(request: Request) {
           endDate: isEmployeeSwap ? null : endDate ? parsedEndDate : null,
           swapWithUserId: isEmployeeSwap ? swapWithUserId : null,
           description,
-          status: isEmployeeSwap ? "APPROVED" : "PENDING",
+          status: "PENDING",
+        },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId,
+          requestId: createdRequest.id,
+          type: isEmployeeSwap ? "SHIFT_SWAP_SUBMITTED" : "REQUEST_SUBMITTED",
+          title: isEmployeeSwap ? "Permintaan tukar shift dikirim" : "Pengajuan jadwal dikirim",
+          message: isEmployeeSwap
+            ? "Permintaan tukar shift Anda menunggu persetujuan karyawan tujuan."
+            : "Pengajuan jadwal Anda menunggu persetujuan admin.",
         },
       });
 
       if (isEmployeeSwap) {
-        await swapShiftAssignments(tx, userId, swapWithUserId, parsedStartDate);
+        await tx.notification.create({
+          data: {
+            userId: swapWithUserId,
+            requestId: createdRequest.id,
+            type: "SHIFT_SWAP_REQUEST",
+            title: "Permintaan tukar shift",
+            message: "Ada permintaan tukar shift yang menunggu persetujuan Anda.",
+          },
+        });
       }
 
       return createdRequest;
@@ -152,19 +171,28 @@ export async function POST(request: Request) {
         where: {
           role: "ADMIN",
           isActive: true,
-          phone: { not: null },
         },
-        select: { phone: true },
+        select: { id: true, phone: true },
       }),
     ]);
     const typeLabel = getRequestTypeLabel(requestType, isDaySwap);
     const dateLabel = isDaySwap
       ? `${formatRequestDate(parsedStartDate)} -> ${formatRequestDate(parsedEndDate)}`
       : formatRequestDate(parsedStartDate);
-    const adminNumbers = [
-      ...admins.map((admin) => admin.phone),
-      ...getWhatsAppAdminNumbers(),
-    ];
+    const adminNumbers = isEmployeeSwap
+      ? []
+      : [...admins.map((admin) => admin.phone).filter((phone): phone is string => Boolean(phone)), ...getWhatsAppAdminNumbers()];
+    if (!isEmployeeSwap && admins.length > 0) {
+      await prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          userId: admin.id,
+          requestId: shiftRequest.id,
+          type: "ADMIN_APPROVAL_REQUIRED",
+          title: "Pengajuan baru menunggu approval",
+          message: `${requester?.name || "Pegawai"} mengajukan ${typeLabel} untuk ${dateLabel}.`,
+        })),
+      });
+    }
     console.info("WhatsApp admin notification targets:", {
       adminUsersWithPhone: admins.length,
       fallbackAdminNumbers: getWhatsAppAdminNumbers().length,
@@ -183,7 +211,7 @@ export async function POST(request: Request) {
             whatsAppField("Pegawai", `${requester?.name || "Pegawai"} (${requester?.nip || "-"})`),
             whatsAppField("Jenis", typeLabel),
             whatsAppField("Tanggal", dateLabel),
-            whatsAppField("Status", isEmployeeSwap ? "Telah diproses otomatis" : "Menunggu persetujuan admin"),
+            whatsAppField("Status", "Menunggu persetujuan admin"),
             "",
             "Silakan buka aplikasi untuk melihat detail pengajuan."
           ),
@@ -195,15 +223,15 @@ export async function POST(request: Request) {
                 whatsAppTitle("Notifikasi Tukar Shift"),
                 "",
                 `Yth. ${targetUser.name || "Pegawai"},`,
-                "Terdapat perubahan jadwal melalui proses tukar shift.",
+                "Terdapat permintaan tukar shift yang menunggu persetujuan Anda.",
                 "",
                 whatsAppCodeBlock([
                   `Pengaju : ${requester?.name || "Pegawai"}`,
                   `Tanggal : ${dateLabel}`,
-                  "Status  : Diproses otomatis",
+                  "Status  : Menunggu persetujuan Anda",
                 ]),
                 "",
-                "Silakan cek aplikasi untuk melihat jadwal terbaru."
+                "Silakan buka aplikasi untuk menyetujui atau menolak pengajuan."
               ),
             }]
           : []),
@@ -212,7 +240,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      autoApproved: isEmployeeSwap,
+      autoApproved: false,
       request: shiftRequest,
     });
   } catch (error) {

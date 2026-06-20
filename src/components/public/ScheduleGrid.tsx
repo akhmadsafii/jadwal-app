@@ -17,7 +17,7 @@ interface PublicScheduleEmployee {
   id: string;
   name: string;
   nip: string;
-  schedule: { date: string; dateKey?: string; shiftType: string }[];
+  schedule: { date: string; dateKey?: string; shiftType: string; requestStatus?: string }[];
 }
 
 const shiftTypeToCode: Record<string, string> = {
@@ -50,8 +50,10 @@ function getCellClass(code: string): string {
       return "cell-cs";
     case "X":
       return "cell-x";
+    case "":
+      return "cell-empty";
     default:
-      return "cell-p";
+      return "cell-empty";
   }
 }
 
@@ -109,6 +111,10 @@ export default function ScheduleGrid({
 
   return (
     <div className="relative overflow-hidden bg-surface">
+      <div className="px-container-margin py-2 text-[10px] text-on-surface-variant flex items-center gap-1.5">
+        <span className="w-2 h-2 rounded-full bg-warning" />
+        Pengajuan masih menunggu persetujuan
+      </div>
       {/* Fixed Shadow Overlay */}
       <div className="absolute left-[140px] top-0 bottom-0 w-4 shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.1)] z-10 pointer-events-none" />
 
@@ -182,7 +188,10 @@ export default function ScheduleGrid({
                 const scheduleByDay = new Map(
                   staff.schedule.map((assignment) => [
                     Number((assignment.dateKey || getDateKeyFromApi(assignment.date)).split("-")[2]),
-                    shiftTypeToCode[assignment.shiftType] || "L",
+                    {
+                      code: shiftTypeToCode[assignment.shiftType] || "",
+                      requestStatus: assignment.requestStatus,
+                    },
                   ])
                 );
 
@@ -203,7 +212,9 @@ export default function ScheduleGrid({
 
                   {/* Schedule Cells */}
                   {Array.from({ length: actualDaysInMonth }, (_, idx) => {
-                    const code = scheduleByDay.get(idx + 1) || "L";
+                    const scheduleInfo = scheduleByDay.get(idx + 1) || { code: "", requestStatus: undefined };
+                    const code = scheduleInfo.code;
+                    const isPending = scheduleInfo.requestStatus === "PENDING";
                     const dayIndex = (dayNamesStartIndex + idx) % 7;
                     const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(idx + 1).padStart(2, "0")}`;
                     const holiday = holidays.get(dateKey);
@@ -215,9 +226,12 @@ export default function ScheduleGrid({
                         className={`min-w-[40px] h-10 text-center border-r border-outline-variant text-xs ${getCellClass(
                           code
                         )} ${isRedDate ? "brightness-95 ring-1 ring-inset ring-error/20" : ""}`}
-                        title={holiday?.name || ""}
+                        title={[holiday?.name, isPending ? "Pengajuan masih menunggu persetujuan" : ""].filter(Boolean).join(" - ")}
                       >
-                        {code}
+                        <span className="relative inline-flex">
+                          {code}
+                          {isPending && <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-warning" />}
+                        </span>
                       </td>
                     );
                   })}

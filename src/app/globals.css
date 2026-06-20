@@ -129,6 +129,7 @@
 /* Schedule Grid Cell Styles */
 .cell-l { background-color: #ffb4ff; color: #430043; } /* Libur - Magenta tint */
 .cell-p { background-color: #ffffff; color: #191b23; } /* Pagi - White */
+.cell-empty { background-color: #ffffff; color: transparent; } /* Belum diatur */
 .cell-s { background-color: #e0f2f1; color: #004d40; } /* Siang - Cyan tint */
 .cell-m { background-color: #e2e8f0; color: #1e293b; } /* Malam - Grey tint */
 .cell-mid { background-color: #fef3c7; color: #92400e; } /* Middle - Amber tint */

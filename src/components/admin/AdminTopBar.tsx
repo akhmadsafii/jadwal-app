@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@/lib/authContext";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { adminNavItems } from "@/data/adminData";
 
 const pageMeta = {
@@ -45,12 +45,21 @@ const pageMeta = {
   },
 };
 
+interface AdminNotification {
+  id: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+}
+
 export default function AdminTopBar() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
 
   const meta = pageMeta[pathname as keyof typeof pageMeta] || pageMeta["/admin"];
 
@@ -60,6 +69,37 @@ export default function AdminTopBar() {
       isActive: pathname === item.href,
     }));
   }, [pathname]);
+
+  useEffect(() => {
+    if (!token) return;
+    const loadNotifications = async () => {
+      try {
+        const response = await fetch("/api/notifications", { headers: { Authorization: `Bearer ${token}` } });
+        if (!response.ok) return;
+        const data = await response.json();
+        setNotifications(data.notifications || []);
+      } catch {
+        // Gagal memuat notifikasi tidak boleh mengganggu halaman admin.
+      }
+    };
+    loadNotifications();
+    const refreshInterval = window.setInterval(loadNotifications, 30_000);
+    return () => window.clearInterval(refreshInterval);
+  }, [token]);
+
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+
+  const markAsRead = (notificationId: string) => {
+    if (!token) return;
+    setNotifications((current) => current.map((notification) => (
+      notification.id === notificationId ? { ...notification, isRead: true } : notification
+    )));
+    void fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ notificationId }),
+    });
+  };
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -100,7 +140,62 @@ export default function AdminTopBar() {
 
           <div className="relative">
             <button
-              onClick={() => setShowMenu(!showMenu)}
+              onClick={() => {
+                setShowNotifications((visible) => !visible);
+                setShowMenu(false);
+              }}
+              className="relative w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors"
+              aria-label="Notifikasi admin"
+            >
+              <span className="material-symbols-outlined text-[21px]">notifications</span>
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-error text-on-error text-[9px] font-bold flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+            {showNotifications && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
+                <div className="absolute right-0 top-full mt-2 w-[min(22rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant z-50">
+                  <div className="px-4 py-3 border-b border-outline-variant flex items-center justify-between">
+                    <p className="text-sm font-bold text-on-surface">Notifikasi Admin</p>
+                    {unreadCount > 0 && <span className="text-[10px] text-primary font-bold">{unreadCount} baru</span>}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-8 text-center text-sm text-on-surface-variant">Belum ada notifikasi</p>
+                  ) : (
+                    <div className="p-2 space-y-1">
+                      {notifications.map((notification) => (
+                        <Link
+                          key={notification.id}
+                          href="/admin/approval"
+                          onClick={() => {
+                            markAsRead(notification.id);
+                            setShowNotifications(false);
+                          }}
+                          className={`block rounded-lg p-3 ${notification.isRead ? "bg-surface-container-low" : "bg-primary/10"}`}
+                        >
+                          <p className="text-sm font-bold text-on-surface">{notification.title}</p>
+                          <p className="text-xs text-on-surface-variant mt-0.5">{notification.message}</p>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                  <Link href="/admin/approval" onClick={() => setShowNotifications(false)} className="block border-t border-outline-variant px-4 py-3 text-center text-xs font-bold text-primary">
+                    Buka halaman approval
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowMenu(!showMenu);
+                setShowNotifications(false);
+              }}
               className="w-9 h-9 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant hover:opacity-80 transition-opacity"
               title="Profile"
             >

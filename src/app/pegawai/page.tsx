@@ -32,6 +32,16 @@ interface ShiftRequest {
   status: RequestStatus;
 }
 
+interface EmployeeNotification {
+  id: string;
+  requestId?: string | null;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 const shiftMeta: Record<ShiftType, {
   code: string;
   label: string;
@@ -168,13 +178,18 @@ export default function PegawaiPage() {
   const [schedule, setSchedule] = useState<ShiftAssignment[]>([]);
   const [allEmployees, setAllEmployees] = useState<EmployeeSchedule[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
+  const [notifications, setNotifications] = useState<EmployeeNotification[]>([]);
+  const [respondingRequestId, setRespondingRequestId] = useState<string | null>(null);
   const [leaveBalance, setLeaveBalance] = useState({ annualLeave: 12, sickLeave: 0, compensation: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const todayKey = getDateKey(now);
+  // Date dan locale server bisa berbeda dengan perangkat pegawai. Jangan
+  // menghitung tanggal lokal sampai komponen benar-benar berjalan di browser,
+  // agar HTML SSR dan render awal React selalu identik.
+  const [now, setNow] = useState<Date | null>(null);
+  const month = now ? now.getMonth() + 1 : undefined;
+  const year = now ? now.getFullYear() : undefined;
+  const todayKey = now ? getDateKey(now) : "";
 
   const todayShift = useMemo(() => {
     return schedule.find((assignment) => getAssignmentKey(assignment) === todayKey)?.shiftType || "LIBUR";
@@ -221,16 +236,21 @@ export default function PegawaiPage() {
   }, [requests]);
 
   useEffect(() => {
+    setNow(new Date());
+  }, []);
+
+  useEffect(() => {
     const fetchDashboard = async () => {
-      if (!user?.id || !token) return;
+      if (!user?.id || !token || !month || !year) return;
 
       setIsLoading(true);
       try {
-        const [balanceRes, ownScheduleRes, allScheduleRes, requestsRes] = await Promise.all([
+        const [balanceRes, ownScheduleRes, allScheduleRes, requestsRes, notificationsRes] = await Promise.all([
           fetch(`/api/users/${user.id}/balance`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`/api/schedules?userId=${user.id}&month=${month}&year=${year}`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`/api/schedules?month=${month}&year=${year}`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`/api/requests?userId=${user.id}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch("/api/notifications", { headers: { Authorization: `Bearer ${token}` } }),
         ]);
 
         if (balanceRes.ok) {
@@ -252,6 +272,10 @@ export default function PegawaiPage() {
           const data = await requestsRes.json();
           setRequests(data.requests || []);
         }
+        if (notificationsRes.ok) {
+          const data = await notificationsRes.json();
+          setNotifications(data.notifications || []);
+        }
       } catch (error) {
         console.error("Failed to fetch employee dashboard:", error);
       } finally {
@@ -263,6 +287,28 @@ export default function PegawaiPage() {
   }, [user?.id, token, month, year]);
 
   const todayMeta = shiftMeta[todayShift];
+  const pendingSwapNotifications = notifications.filter(
+    (notification) => notification.type === "SHIFT_SWAP_REQUEST" && !notification.isRead && notification.requestId
+  );
+
+  const respondToSwap = async (requestId: string, decision: "APPROVED" | "REJECTED") => {
+    if (!token || respondingRequestId) return;
+    setRespondingRequestId(requestId);
+    try {
+      const response = await fetch("/api/requests/respond-swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ requestId, decision }),
+      });
+      if (!response.ok) throw new Error("Gagal menanggapi permintaan");
+      window.location.reload();
+    } catch (error) {
+      console.error("Failed to respond to swap:", error);
+      alert("Gagal menanggapi permintaan tukar shift. Silakan coba lagi.");
+    } finally {
+      setRespondingRequestId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen pb-[132px] bg-background">
@@ -270,11 +316,44 @@ export default function PegawaiPage() {
 
       <main className="px-container-margin max-w-2xl mx-auto">
         <section className="py-4">
-          <p className="text-sm text-on-surface-variant">{formatDate(now)}</p>
+          <p className="text-sm text-on-surface-variant">{now ? formatDate(now) : ""}</p>
           <h1 className="text-2xl font-bold text-on-surface mt-1">
             Halo, {getDisplayName(user?.name)}
           </h1>
         </section>
+
+        {pendingSwapNotifications.length > 0 && (
+          <section className="mb-4 rounded-2xl border border-secondary/30 bg-secondary-container/40 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-secondary">notifications_active</span>
+              <h2 className="text-sm font-bold text-on-surface">Permintaan Tukar Shift</h2>
+            </div>
+            <div className="space-y-3">
+              {pendingSwapNotifications.map((notification) => (
+                <div key={notification.id} className="rounded-xl bg-surface-container-lowest p-3 border border-outline-variant">
+                  <p className="text-sm font-bold text-on-surface">{notification.title}</p>
+                  <p className="text-xs text-on-surface-variant mt-1">{notification.message}</p>
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <button
+                      onClick={() => respondToSwap(notification.requestId!, "REJECTED")}
+                      disabled={respondingRequestId === notification.requestId}
+                      className="h-10 rounded-lg border border-error/30 text-error text-xs font-bold disabled:opacity-60"
+                    >
+                      Tolak
+                    </button>
+                    <button
+                      onClick={() => respondToSwap(notification.requestId!, "APPROVED")}
+                      disabled={respondingRequestId === notification.requestId}
+                      className="h-10 rounded-lg bg-primary text-on-primary text-xs font-bold disabled:opacity-60"
+                    >
+                      {respondingRequestId === notification.requestId ? "Memproses..." : "Setujui"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className={`rounded-2xl border p-4 ${todayMeta.surface}`}>
           <div className="flex items-start justify-between gap-3">

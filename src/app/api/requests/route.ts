@@ -15,6 +15,13 @@ export async function GET(request: Request) {
 
     if (userId) {
       where.userId = userId;
+    } else {
+      // Tukar shift antar-karyawan ditanggapi langsung oleh karyawan tujuan,
+      // sehingga tidak masuk antrean approval admin.
+      where.NOT = {
+        type: "TUKAR_SHIFT",
+        swapWithUserId: { not: null },
+      };
     }
 
     const requests = await prisma.shiftRequest.findMany({

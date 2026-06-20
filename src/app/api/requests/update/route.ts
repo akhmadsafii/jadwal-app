@@ -159,11 +159,15 @@ export async function PUT(request: Request) {
     const updatedRequest = await prisma.$transaction(async (tx) => {
       const existing = await tx.shiftRequest.findUnique({
         where: { id: requestId },
-        select: { status: true },
+        select: { status: true, type: true, swapWithUserId: true },
       });
 
       if (!existing) {
         throw new Error("Request not found");
+      }
+
+      if (existing.type === "TUKAR_SHIFT" && existing.swapWithUserId) {
+        throw new Error("EMPLOYEE_SWAP_REQUIRES_TARGET_APPROVAL");
       }
 
       const updated = await tx.shiftRequest.update({
@@ -233,6 +237,20 @@ export async function PUT(request: Request) {
         }
       }
 
+      if ((status === "APPROVED" || status === "REJECTED") && existing.status !== status) {
+        await tx.notification.create({
+          data: {
+            userId: updated.userId,
+            requestId: updated.id,
+            type: status === "APPROVED" ? "REQUEST_APPROVED" : "REQUEST_REJECTED",
+            title: status === "APPROVED" ? "Pengajuan disetujui" : "Pengajuan ditolak",
+            message: status === "APPROVED"
+              ? "Pengajuan jadwal Anda telah disetujui admin. Jadwal sudah diperbarui."
+              : "Pengajuan jadwal Anda ditolak admin. Silakan cek catatan admin.",
+          },
+        });
+      }
+
       return updated;
     });
 
@@ -280,6 +298,12 @@ export async function PUT(request: Request) {
       return NextResponse.json(
         { error: "Saldo cuti pegawai tidak cukup untuk menyetujui pengajuan ini" },
         { status: 409 }
+      );
+    }
+    if (error instanceof Error && error.message === "EMPLOYEE_SWAP_REQUIRES_TARGET_APPROVAL") {
+      return NextResponse.json(
+        { error: "Tukar shift antar-karyawan hanya dapat ditanggapi oleh karyawan tujuan" },
+        { status: 403 }
       );
     }
 

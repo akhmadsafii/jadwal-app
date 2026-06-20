@@ -17,12 +17,13 @@ interface ShiftAssignment {
   dateKey?: string;
   shiftType: ShiftType;
   fromRequest?: boolean;
+  requestStatus?: RequestStatus;
 }
 
 interface DaySchedule {
   date: Date;
   dateKey: string;
-  shiftType: ShiftType;
+  shiftType: ShiftType | null;
 }
 
 interface ShiftRequest {
@@ -220,8 +221,8 @@ function formatFullDate(date: Date) {
   });
 }
 
-function isWorkShift(shiftType: ShiftType) {
-  return !["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(shiftType);
+function isWorkShift(shiftType: ShiftType | null) {
+  return Boolean(shiftType) && !["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(shiftType);
 }
 
 function getRequestForDay(requests: ShiftRequest[], dateKey: string) {
@@ -280,7 +281,7 @@ export default function PegawaiRosterPage() {
       return {
         date,
         dateKey,
-        shiftType: scheduleByDate.get(dateKey) || "LIBUR",
+        shiftType: scheduleByDate.get(dateKey) || null,
       };
     });
   }, [month, schedule, year]);
@@ -308,7 +309,7 @@ export default function PegawaiRosterPage() {
 
   const filteredDays = days.filter((day) => {
     if (activeFilter === "WORK") return isWorkShift(day.shiftType);
-    if (activeFilter === "OFF") return ["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(day.shiftType);
+    if (activeFilter === "OFF") return Boolean(day.shiftType) && ["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(day.shiftType);
     if (activeFilter === "NIGHT") return day.shiftType === "MALAM";
     return true;
   });
@@ -423,7 +424,7 @@ export default function PegawaiRosterPage() {
     const swapTarget = employees.find((employee) => employee.id === swapWithUserId);
     const confirmed = confirm(
       isEmployeeSwapRequest
-        ? `Tukar shift tanggal ${formatFullDate(selectedDay.date)} dengan ${swapTarget?.name || "karyawan tujuan"}? Jadwal akan langsung berubah.`
+        ? `Ajukan tukar shift tanggal ${formatFullDate(selectedDay.date)} dengan ${swapTarget?.name || "karyawan tujuan"}? Jadwal berubah setelah disetujui karyawan tujuan.`
         : isDaySwapRequest
           ? `Ajukan tukar hari ${formatFullDate(selectedDay.date)} dengan ${formatFullDate(dateKeyToLocalDate(swapDayDate))}? Jadwal berubah setelah disetujui admin.`
         : `Kirim pengajuan ${requestTypeLabels[requestType]} untuk tanggal ${formatFullDate(selectedDay.date)}?`
@@ -582,7 +583,7 @@ export default function PegawaiRosterPage() {
               </div>
             ) : (
               filteredDays.map((item) => {
-                const meta = shiftMeta[item.shiftType];
+                const meta = item.shiftType ? shiftMeta[item.shiftType] : null;
                 const isTodayItem = item.dateKey === todayKey;
                 const holiday = holidays.get(item.dateKey);
                 const isRedDate = item.date.getDay() === 0 || Boolean(holiday);
@@ -591,6 +592,7 @@ export default function PegawaiRosterPage() {
                 // Check if this day has a schedule from an approved request
                 const scheduleEntry = schedule.find((s) => (s.dateKey || apiDateToKey(s.date)) === item.dateKey);
                 const isFromRequest = scheduleEntry?.fromRequest || false;
+                const isPendingRequest = scheduleEntry?.requestStatus === "PENDING";
 
                 return (
                   <button
@@ -603,7 +605,7 @@ export default function PegawaiRosterPage() {
                         : isRedDate
                           ? "border-error/25 bg-error-container/10"
                           : "border-outline-variant bg-surface-container-lowest"
-                    } ${isFromRequest ? "ring-2 ring-warning" : ""} text-left w-full active:scale-[0.99] transition-transform`}
+                    } ${isPendingRequest ? "ring-2 ring-warning" : isFromRequest ? "ring-2 ring-primary/50" : ""} text-left w-full active:scale-[0.99] transition-transform`}
                   >
                     <div className={`w-14 rounded-lg py-2 text-center ${isTodayItem ? "bg-primary text-on-primary" : isRedDate ? "bg-error text-on-error" : "bg-surface-container text-on-surface"}`}>
                       <p className="text-[10px] font-semibold uppercase">{formatDay(item.date)}</p>
@@ -611,15 +613,15 @@ export default function PegawaiRosterPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${meta.pill}`}>
-                          {meta.code}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${meta?.pill || "bg-surface-container text-outline"}`}>
+                          {meta?.code || "-"}
                         </span>
                         {isTodayItem && (
                           <span className="text-[10px] font-bold text-primary">HARI INI</span>
                         )}
                         {isFromRequest && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-warning text-white">
-                            PERMINTAAN
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isPendingRequest ? "bg-warning text-white" : "bg-primary/10 text-primary"}`}>
+                            {isPendingRequest ? "MENUNGGU" : "PERMINTAAN"}
                           </span>
                         )}
                         {holiday && (
@@ -628,8 +630,8 @@ export default function PegawaiRosterPage() {
                           </span>
                         )}
                       </div>
-                      <h3 className="text-sm font-bold text-on-surface mt-1">{meta.label}</h3>
-                      <p className="text-xs text-on-surface-variant">{holiday?.name || meta.time}</p>
+                      <h3 className="text-sm font-bold text-on-surface mt-1">{meta?.label || "Belum diatur"}</h3>
+                      <p className="text-xs text-on-surface-variant">{holiday?.name || meta?.time || "Jadwal belum dibuat"}</p>
                       {dayRequest && (
                         <span className={`inline-flex items-center gap-1 mt-2 px-2 py-1 rounded text-[10px] font-bold ${requestStatusMeta[dayRequest.status].badge}`}>
                           <span className="material-symbols-outlined text-[14px]">{requestStatusMeta[dayRequest.status].icon}</span>
@@ -639,7 +641,7 @@ export default function PegawaiRosterPage() {
                     </div>
                     <div className="flex flex-col items-center gap-1">
                       <span className={`material-symbols-outlined text-[22px] ${isWorkShift(item.shiftType) ? "text-primary" : "text-outline"}`}>
-                        {meta.icon}
+                        {meta?.icon || "event_available"}
                       </span>
                       <span className="material-symbols-outlined text-[18px] text-outline">edit_calendar</span>
                     </div>

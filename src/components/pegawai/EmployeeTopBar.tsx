@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@/lib/authContext";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { employeeNavItems } from "@/data/employeeData";
 
 const pageMeta = {
@@ -31,6 +31,12 @@ const pageMeta = {
     icon: "pending_actions",
     accent: "bg-primary-container text-on-primary-container",
   },
+  "/pegawai/notifications": {
+    title: "Notifikasi",
+    subtitle: "Pengajuan dan pembaruan jadwal Anda",
+    icon: "notifications",
+    accent: "bg-secondary-container text-on-secondary-container",
+  },
   "/pegawai/profile": {
     title: "Profil Saya",
     subtitle: "Edit informasi akun",
@@ -45,12 +51,24 @@ const pageMeta = {
   },
 };
 
+interface AppNotification {
+  id: string;
+  requestId?: string | null;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 export default function EmployeeTopBar() {
-  const { user, logout, isDefaultPassword } = useAuth();
+  const { user, token, logout, isDefaultPassword } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [showMenu, setShowMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   const meta = pageMeta[pathname as keyof typeof pageMeta] || pageMeta["/pegawai"];
 
@@ -60,6 +78,49 @@ export default function EmployeeTopBar() {
       isActive: pathname === item.href,
     }));
   }, [pathname]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const loadNotifications = async () => {
+      try {
+        const response = await fetch("/api/notifications", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        setNotifications(data.notifications || []);
+      } catch {
+        // Notifikasi tidak boleh mengganggu akses halaman utama.
+      }
+    };
+
+    loadNotifications();
+    const refreshInterval = window.setInterval(loadNotifications, 30_000);
+    return () => window.clearInterval(refreshInterval);
+  }, [token]);
+
+  const markAsRead = async (notificationId: string) => {
+    if (!token) return;
+    setNotifications((current) => current.map((notification) => (
+      notification.id === notificationId ? { ...notification, isRead: true } : notification
+    )));
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ notificationId }),
+    }).catch(() => undefined);
+  };
+
+  const openNotification = async (notification: AppNotification) => {
+    if (notification.type !== "SHIFT_SWAP_REQUEST") {
+      await markAsRead(notification.id);
+    }
+    setShowNotifications(false);
+    router.push("/pegawai/notifications");
+  };
+
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -106,7 +167,74 @@ export default function EmployeeTopBar() {
 
           <div className="relative">
             <button
-              onClick={() => setShowMenu(!showMenu)}
+              onClick={() => {
+                setShowNotifications((visible) => !visible);
+                setShowMenu(false);
+              }}
+              className="relative w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors"
+              aria-label="Notifikasi"
+            >
+              <span className="material-symbols-outlined text-[21px]">notifications</span>
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-error text-on-error text-[9px] font-bold flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
+                <div className="absolute right-0 top-full mt-2 w-[min(22rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant z-50">
+                  <div className="px-4 py-3 border-b border-outline-variant flex items-center justify-between">
+                    <p className="text-sm font-bold text-on-surface">Notifikasi</p>
+                    {unreadCount > 0 && <span className="text-[10px] text-primary font-bold">{unreadCount} baru</span>}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-8 text-center text-sm text-on-surface-variant">Belum ada notifikasi</p>
+                  ) : (
+                    <div className="p-2 space-y-1">
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          onClick={() => openNotification(notification)}
+                          className={`w-full text-left rounded-lg p-3 transition-colors ${
+                            notification.isRead ? "bg-surface-container-low" : "bg-primary/10 hover:bg-primary/15"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className={`material-symbols-outlined text-[18px] mt-0.5 ${notification.isRead ? "text-outline" : "text-primary"}`}>
+                              {notification.type.includes("SWAP") ? "swap_horiz" : "notifications"}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-on-surface">{notification.title}</p>
+                              <p className="text-xs text-on-surface-variant mt-0.5">{notification.message}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {notifications.length > 0 && (
+                    <Link
+                      href="/pegawai/notifications"
+                      onClick={() => setShowNotifications(false)}
+                      className="block text-center border-t border-outline-variant px-4 py-3 text-xs font-bold text-primary"
+                    >
+                      Lihat riwayat notifikasi
+                    </Link>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowMenu(!showMenu);
+                setShowNotifications(false);
+              }}
               className="w-9 h-9 rounded-full overflow-hidden bg-primary-container border border-outline-variant hover:opacity-80 transition-opacity"
               title="Profile"
             >

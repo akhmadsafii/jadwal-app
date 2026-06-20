@@ -54,7 +54,6 @@ export async function GET(request: Request) {
     const month = searchParams.get("month");
     const year = searchParams.get("year");
     const userId = searchParams.get("userId");
-    const includePendingRequests = searchParams.get("includePendingRequests") === "1";
 
     const now = new Date();
     const targetMonth = month ? parseInt(month) : now.getMonth() + 1;
@@ -76,10 +75,11 @@ export async function GET(request: Request) {
         orderBy: { date: "asc" },
       });
 
-      // Get approved requests for this user
-      const approvedRequests = await prisma.shiftRequest.findMany({
+      // Pending requests remain visible on the roster, but are not applied to
+      // persisted assignments until they are approved.
+      const visibleRequests = await prisma.shiftRequest.findMany({
         where: {
-          status: "APPROVED",
+          status: { in: ["APPROVED", "PENDING"] },
           OR: [
             { userId },
             { swapWithUserId: userId },
@@ -103,20 +103,26 @@ export async function GET(request: Request) {
       };
 
       const requestDates = new Map<string, string>();
+      const requestMeta = new Map<string, { requestId: string; requestStatus: string; requestType: string }>();
       const lockedRequestDates = new Set<string>();
-      approvedRequests.forEach((req) => {
+      visibleRequests.forEach((req) => {
         getRequestDates(req).forEach((date) => {
           const dateKey = toDateKey(date);
-          if (req.userId === userId || req.swapWithUserId === userId) {
+          if (req.status === "APPROVED" && (req.userId === userId || req.swapWithUserId === userId)) {
             lockedRequestDates.add(dateKey);
           }
+          requestMeta.set(dateKey, {
+            requestId: req.id,
+            requestStatus: req.status,
+            requestType: req.type,
+          });
           const shiftType = requestTypeToShiftType[req.type];
           if (shiftType && req.userId === userId) requestDates.set(dateKey, shiftType);
         });
       });
 
       // Build schedule entries
-      const scheduleEntries: { date: Date; dateKey: string; shiftType: string; fromRequest: boolean }[] = [];
+      const scheduleEntries: { date: Date; dateKey: string; shiftType: string; fromRequest: boolean; requestStatus?: string; requestId?: string; requestType?: string }[] = [];
 
       // Add regular assignments
       userSchedule.forEach((s) => {
@@ -124,14 +130,17 @@ export async function GET(request: Request) {
         scheduleEntries.push({
           date: s.date,
           dateKey,
-          shiftType: s.shiftType,
-          fromRequest: lockedRequestDates.has(dateKey),
+          shiftType: requestDates.get(dateKey) || s.shiftType,
+          fromRequest: requestMeta.has(dateKey),
+          requestStatus: requestMeta.get(dateKey)?.requestStatus,
+          requestId: requestMeta.get(dateKey)?.requestId,
+          requestType: requestMeta.get(dateKey)?.requestType,
         });
       });
 
-      // Add approved request shifts (only if not already in schedule)
+      // Add request shifts (only if not already in schedule)
       const existingDates = new Set(userSchedule.map((s) => toDateKey(s.date)));
-      approvedRequests.forEach((req) => {
+      visibleRequests.forEach((req) => {
         getRequestDates(req).forEach((date) => {
           const dateKey = toDateKey(date);
           if (!existingDates.has(dateKey)) {
@@ -142,6 +151,9 @@ export async function GET(request: Request) {
                 dateKey,
                 shiftType,
                 fromRequest: true,
+                requestStatus: requestMeta.get(dateKey)?.requestStatus,
+                requestId: requestMeta.get(dateKey)?.requestId,
+                requestType: requestMeta.get(dateKey)?.requestType,
               });
             }
           }
@@ -187,9 +199,7 @@ export async function GET(request: Request) {
     });
 
     const employeeIds = employees.map((employee) => employee.id);
-    const visibleRequestStatuses: ("APPROVED" | "PENDING")[] = includePendingRequests
-      ? ["APPROVED", "PENDING"]
-      : ["APPROVED"];
+    const visibleRequestStatuses: ("APPROVED" | "PENDING")[] = ["APPROVED", "PENDING"];
 
     const approvedRequests = await prisma.shiftRequest.findMany({
       where: {
