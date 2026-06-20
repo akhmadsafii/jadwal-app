@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { swapShiftAssignments } from "@/lib/swapShiftAssignments";
-import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import {
+  sendWhatsAppMessage,
+  whatsAppCodeBlock,
+  whatsAppText,
+  whatsAppTitle,
+} from "@/lib/whatsapp";
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -244,14 +249,22 @@ export async function PUT(request: Request) {
 
       await sendWhatsAppMessage({
         number: updatedRequest.user.phone,
-        message: [
-          "Notifikasi Pengajuan Jadwal",
-          `Pengajuan Anda telah ${statusLabel}.`,
-          `Jenis pengajuan: ${typeLabel}`,
-          `Tanggal: ${dateLabel}`,
-          updatedRequest.adminNotes ? `Catatan admin: ${updatedRequest.adminNotes}` : "",
-          "Silakan cek aplikasi untuk melihat detail pengajuan.",
-        ].filter(Boolean).join("\n"),
+        message: whatsAppText(
+          whatsAppTitle("Status Pengajuan Jadwal"),
+          "",
+          `Yth. ${updatedRequest.user.name || "Pegawai"},`,
+          `Pengajuan Anda telah *${statusLabel}* oleh admin.`,
+          "",
+          whatsAppCodeBlock([
+            `Jenis   : ${typeLabel}`,
+            `Tanggal : ${dateLabel}`,
+            `Status  : ${statusLabel}`,
+          ]),
+          updatedRequest.adminNotes ? "" : null,
+          updatedRequest.adminNotes ? `*Catatan admin:*\n${updatedRequest.adminNotes}` : null,
+          "",
+          "Silakan cek aplikasi untuk melihat detail pengajuan."
+        ),
       }).catch((error) => {
         console.error("WhatsApp notification error:", error);
       });

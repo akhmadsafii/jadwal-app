@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { swapShiftAssignments } from "@/lib/swapShiftAssignments";
-import { getWhatsAppAdminNumbers, sendWhatsAppMessages } from "@/lib/whatsapp";
+import {
+  getWhatsAppAdminNumbers,
+  sendWhatsAppMessages,
+  whatsAppCodeBlock,
+  whatsAppField,
+  whatsAppText,
+  whatsAppTitle,
+} from "@/lib/whatsapp";
 
 function parseLocalDate(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -167,24 +174,37 @@ export async function POST(request: Request) {
       [
         ...adminNumbers.map((adminNumber) => ({
           number: adminNumber,
-          message: [
-            "Notifikasi Pengajuan Jadwal",
-            `Pengajuan baru diterima dari ${requester?.name || "Pegawai"} (${requester?.nip || "-"})`,
-            `Jenis pengajuan: ${typeLabel}`,
-            `Tanggal: ${dateLabel}`,
-            isEmployeeSwap ? "Status: telah diproses otomatis oleh sistem." : "Status: menunggu persetujuan admin.",
-          ].join("\n"),
+          message: whatsAppText(
+            whatsAppTitle("Notifikasi Pengajuan Jadwal"),
+            "",
+            "Yth. Admin,",
+            "Terdapat pengajuan jadwal baru yang perlu ditinjau.",
+            "",
+            whatsAppField("Pegawai", `${requester?.name || "Pegawai"} (${requester?.nip || "-"})`),
+            whatsAppField("Jenis", typeLabel),
+            whatsAppField("Tanggal", dateLabel),
+            whatsAppField("Status", isEmployeeSwap ? "Telah diproses otomatis" : "Menunggu persetujuan admin"),
+            "",
+            "Silakan buka aplikasi untuk melihat detail pengajuan."
+          ),
         })),
         ...(targetUser && isEmployeeSwap
           ? [{
               number: targetUser.phone,
-              message: [
-                "Notifikasi Tukar Shift",
-                `${requester?.name || "Pegawai"} telah menukar shift dengan Anda.`,
-                `Tanggal: ${dateLabel}`,
-                "Perubahan jadwal telah diproses otomatis oleh sistem.",
-                "Silakan cek aplikasi untuk melihat jadwal terbaru.",
-              ].join("\n"),
+              message: whatsAppText(
+                whatsAppTitle("Notifikasi Tukar Shift"),
+                "",
+                `Yth. ${targetUser.name || "Pegawai"},`,
+                "Terdapat perubahan jadwal melalui proses tukar shift.",
+                "",
+                whatsAppCodeBlock([
+                  `Pengaju : ${requester?.name || "Pegawai"}`,
+                  `Tanggal : ${dateLabel}`,
+                  "Status  : Diproses otomatis",
+                ]),
+                "",
+                "Silakan cek aplikasi untuk melihat jadwal terbaru."
+              ),
             }]
           : []),
       ]

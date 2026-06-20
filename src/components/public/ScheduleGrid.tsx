@@ -10,6 +10,7 @@ interface ScheduleGridProps {
   selectedMonth?: { month: number; year: number };
   employees?: PublicScheduleEmployee[];
   isLoading?: boolean;
+  errorMessage?: string | null;
 }
 
 interface PublicScheduleEmployee {
@@ -75,6 +76,7 @@ export default function ScheduleGrid({
   selectedMonth,
   employees,
   isLoading = false,
+  errorMessage = null,
 }: ScheduleGridProps) {
   // Get actual month and year
   const month = selectedMonth?.month || new Date().getMonth() + 1;
@@ -161,6 +163,12 @@ export default function ScheduleGrid({
               <tr>
                 <td colSpan={actualDaysInMonth + 1} className="py-10 text-center text-sm text-outline">
                   Memuat jadwal...
+                </td>
+              </tr>
+            ) : errorMessage ? (
+              <tr>
+                <td colSpan={actualDaysInMonth + 1} className="py-10 px-4 text-center text-sm text-error">
+                  {errorMessage}
                 </td>
               </tr>
             ) : visibleEmployees.length === 0 ? (

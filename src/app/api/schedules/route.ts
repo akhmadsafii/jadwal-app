@@ -348,6 +348,10 @@ export async function GET(request: Request) {
         { name: "Siang (S)", code: "S", percentage: percentage(shiftCounts.SIANG), color: "bg-tertiary", count: shiftCounts.SIANG },
         { name: "Malam (M)", code: "M", percentage: percentage(shiftCounts.MALAM), color: "bg-secondary", count: shiftCounts.MALAM },
       ],
+    }, {
+      // Jadwal harus selalu mencerminkan perubahan terakhir; terutama Safari
+      // dapat menyimpan respons GET lama saat kembali ke halaman publik.
+      headers: { "Cache-Control": "no-store, max-age=0" },
     });
   } catch (error) {
     console.error("Get schedules error:", error);

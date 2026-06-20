@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { sendWhatsAppMessages } from "@/lib/whatsapp";
+import {
+  sendWhatsAppMessages,
+  whatsAppCodeBlock,
+  whatsAppText,
+  whatsAppTitle,
+} from "@/lib/whatsapp";
 
 type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 
@@ -265,13 +270,17 @@ export async function POST(request: Request) {
 
           return {
             number: user.phone,
-            message: [
-              "Notifikasi Perubahan Jadwal",
-              `Yth. ${user.name}, jadwal Anda telah diperbarui oleh admin.`,
-              ...detailLines,
-              remainingCount > 0 ? `Dan ${remainingCount} perubahan jadwal lainnya.` : "",
-              "Silakan cek aplikasi untuk melihat detail jadwal terbaru.",
-            ].filter(Boolean).join("\n"),
+            message: whatsAppText(
+              whatsAppTitle("Notifikasi Perubahan Jadwal"),
+              "",
+              `Yth. ${user.name},`,
+              "Jadwal Anda telah diperbarui oleh admin.",
+              "",
+              whatsAppCodeBlock(detailLines),
+              remainingCount > 0 ? `_${remainingCount} perubahan jadwal lainnya tersedia di aplikasi._` : null,
+              "",
+              "Silakan cek aplikasi untuk melihat detail jadwal terbaru."
+            ),
           };
         })
       );

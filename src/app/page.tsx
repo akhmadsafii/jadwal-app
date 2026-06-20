@@ -31,6 +31,7 @@ export default function Home() {
   });
   const [scheduleData, setScheduleData] = useState<ScheduleResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const daysInMonth = getDaysInMonth(selectedMonth.year, selectedMonth.month);
   const monthlyStats = scheduleData?.monthlyStats;
@@ -47,13 +48,24 @@ export default function Home() {
   useEffect(() => {
     const fetchSchedule = async () => {
       setIsLoading(true);
+      setScheduleError(null);
       try {
         const response = await fetch(
-          `/api/schedules?month=${selectedMonth.month}&year=${selectedMonth.year}`
+          `/api/schedules?month=${selectedMonth.month}&year=${selectedMonth.year}`,
+          { cache: "no-store" }
         );
-        if (response.ok) {
-          setScheduleData(await response.json());
+        if (!response.ok) {
+          throw new Error(`Server mengembalikan status ${response.status}`);
         }
+        const data = await response.json();
+        if (!Array.isArray(data?.employees)) {
+          throw new Error("Format data jadwal tidak valid");
+        }
+        setScheduleData(data);
+      } catch (error) {
+        console.error("Gagal memuat jadwal publik:", error);
+        setScheduleData(null);
+        setScheduleError("Jadwal belum dapat dimuat. Periksa koneksi internet lalu muat ulang halaman.");
       } finally {
         setIsLoading(false);
       }
@@ -73,6 +85,7 @@ export default function Home() {
           selectedMonth={selectedMonth}
           employees={scheduleData?.employees || []}
           isLoading={isLoading}
+          errorMessage={scheduleError}
         />
 
         {/* Monthly Shift Statistics */}

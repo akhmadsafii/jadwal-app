@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import {
+  sendWhatsAppMessage,
+  whatsAppCodeBlock,
+  whatsAppText,
+  whatsAppTitle,
+} from "@/lib/whatsapp";
 
 type ShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
 
@@ -82,12 +87,18 @@ export async function POST(request: Request) {
 
       await sendWhatsAppMessage({
         number: user?.phone,
-        message: [
-          "Notifikasi Perubahan Jadwal",
-          `Yth. ${user?.name || "Pegawai"}, jadwal Anda telah diperbarui oleh admin.`,
-          `${formatScheduleDate(data.date)}: ${shiftLabels[existingAssignment?.shiftType || "NONE"]} menjadi ${shiftLabels[data.shiftType]}`,
-          "Silakan cek aplikasi untuk melihat jadwal terbaru.",
-        ].join("\n"),
+        message: whatsAppText(
+          whatsAppTitle("Notifikasi Perubahan Jadwal"),
+          "",
+          `Yth. ${user?.name || "Pegawai"},`,
+          "Jadwal Anda telah diperbarui oleh admin.",
+          "",
+          whatsAppCodeBlock([
+            `${formatScheduleDate(data.date)}: ${shiftLabels[existingAssignment?.shiftType || "NONE"]} menjadi ${shiftLabels[data.shiftType]}`,
+          ]),
+          "",
+          "Silakan cek aplikasi untuk melihat jadwal terbaru."
+        ),
       }).catch((error) => {
         console.error("WhatsApp notification error:", error);
       });

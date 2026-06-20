@@ -20,6 +20,22 @@ export function getWhatsAppAdminNumbers() {
     .filter(Boolean);
 }
 
+export function whatsAppText(...lines: Array<string | false | null | undefined>) {
+  return lines.filter(Boolean).join("\n");
+}
+
+export function whatsAppTitle(title: string) {
+  return `*${title}*`;
+}
+
+export function whatsAppField(label: string, value: string | number | null | undefined) {
+  return `*${label}:* ${value || "-"}`;
+}
+
+export function whatsAppCodeBlock(lines: string[]) {
+  return ["```", ...lines, "```"].join("\n");
+}
+
 export async function sendWhatsAppMessage({ number, message }: WhatsAppPayload) {
   const apiKey = process.env.WHATSAPP_API_KEY;
   const sender = process.env.WHATSAPP_SENDER;
