@@ -17,6 +17,7 @@ interface ShiftAssignment {
   dateKey?: string;
   shiftType: ShiftType;
   fromRequest?: boolean;
+  pendingShiftType?: ShiftType;
   requestStatus?: RequestStatus;
 }
 
@@ -222,7 +223,8 @@ function formatFullDate(date: Date) {
 }
 
 function isWorkShift(shiftType: ShiftType | null) {
-  return Boolean(shiftType) && !["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(shiftType);
+  if (!shiftType) return false;
+  return !["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(shiftType);
 }
 
 function getRequestForDay(requests: ShiftRequest[], dateKey: string) {
@@ -288,7 +290,9 @@ export default function PegawaiRosterPage() {
 
   const todayKey = getDateKey(new Date());
   const todaySchedule = days.find((day) => day.dateKey === todayKey);
-  const nextWorkShift = days.find((day) => day.dateKey >= todayKey && isWorkShift(day.shiftType));
+  const nextWorkShift = days.find((day): day is DaySchedule & { shiftType: ShiftType } => (
+    day.dateKey >= todayKey && isWorkShift(day.shiftType)
+  ));
   const selectedRequest = selectedDay ? getRequestForDay(requests, selectedDay.dateKey) : undefined;
   const selectedRequestLocked = selectedRequest?.status === "PENDING" || selectedRequest?.status === "APPROVED";
   const isDaySwapRequest = requestType === "TUKAR_HARI";
@@ -309,7 +313,7 @@ export default function PegawaiRosterPage() {
 
   const filteredDays = days.filter((day) => {
     if (activeFilter === "WORK") return isWorkShift(day.shiftType);
-    if (activeFilter === "OFF") return Boolean(day.shiftType) && ["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(day.shiftType);
+    if (activeFilter === "OFF") return day.shiftType ? ["LIBUR", "CUTI", "SAKIT", "TURUN"].includes(day.shiftType) : false;
     if (activeFilter === "NIGHT") return day.shiftType === "MALAM";
     return true;
   });
@@ -388,7 +392,7 @@ export default function PegawaiRosterPage() {
       MALAM: "SHIFT_MALAM",
       CUTI: "CUTI_TAHUNAN",
     };
-    const defaultType = defaultTypeByShift[day.shiftType] || "CUTI_TAHUNAN";
+    const defaultType = day.shiftType ? defaultTypeByShift[day.shiftType] || "CUTI_TAHUNAN" : "CUTI_TAHUNAN";
     const nextDate = new Date(day.date);
     nextDate.setDate(nextDate.getDate() + 1);
     setSelectedDay(day);
@@ -437,7 +441,7 @@ export default function PegawaiRosterPage() {
     try {
       const response = await fetch("/api/requests/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           userId: user.id,
           type: requestType,
@@ -511,8 +515,8 @@ export default function PegawaiRosterPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold opacity-80">Hari ini</p>
-                <h2 className="text-xl font-bold mt-1">{todaySchedule ? shiftMeta[todaySchedule.shiftType].label : "Tidak ada jadwal"}</h2>
-                <p className="text-sm mt-1 opacity-80">{todaySchedule ? shiftMeta[todaySchedule.shiftType].time : "-"}</p>
+                <h2 className="text-xl font-bold mt-1">{todaySchedule?.shiftType ? shiftMeta[todaySchedule.shiftType].label : "Belum diatur"}</h2>
+                <p className="text-sm mt-1 opacity-80">{todaySchedule?.shiftType ? shiftMeta[todaySchedule.shiftType].time : "Jadwal belum dibuat"}</p>
               </div>
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${shiftMeta[todaySchedule?.shiftType || "LIBUR"].pill}`}>
                 <span className="material-symbols-outlined">{shiftMeta[todaySchedule?.shiftType || "LIBUR"].icon}</span>
@@ -593,6 +597,8 @@ export default function PegawaiRosterPage() {
                 const scheduleEntry = schedule.find((s) => (s.dateKey || apiDateToKey(s.date)) === item.dateKey);
                 const isFromRequest = scheduleEntry?.fromRequest || false;
                 const isPendingRequest = scheduleEntry?.requestStatus === "PENDING";
+                const pendingShiftType = scheduleEntry?.pendingShiftType;
+                const showPreviousAndRequested = isPendingRequest && pendingShiftType && pendingShiftType !== item.shiftType;
 
                 return (
                   <button
@@ -621,7 +627,7 @@ export default function PegawaiRosterPage() {
                         )}
                         {isFromRequest && (
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isPendingRequest ? "bg-warning text-white" : "bg-primary/10 text-primary"}`}>
-                            {isPendingRequest ? "MENUNGGU" : "PERMINTAAN"}
+                            {isPendingRequest ? showPreviousAndRequested ? `${meta?.code || "-"} → ${shiftMeta[pendingShiftType!].code}` : "MENUNGGU" : "PERMINTAAN"}
                           </span>
                         )}
                         {holiday && (
@@ -668,7 +674,7 @@ export default function PegawaiRosterPage() {
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-outline">Pengajuan tanggal</p>
                 <h2 className="text-lg font-bold text-on-surface mt-1">{formatFullDate(selectedDay.date)}</h2>
                 <p className="text-sm text-on-surface-variant">
-                  Jadwal sekarang: {shiftMeta[selectedDay.shiftType].label}
+                  Jadwal sekarang: {selectedDay.shiftType ? shiftMeta[selectedDay.shiftType].label : "Belum diatur"}
                 </p>
               </div>
               <button

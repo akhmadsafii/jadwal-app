@@ -43,15 +43,18 @@ export async function POST(request: Request) {
         await swapShiftAssignments(tx, updated.userId, targetUserId, toStartOfDay(updated.startDate));
       }
 
-      await tx.notification.updateMany({
-        where: { userId: targetUserId, requestId: updated.id },
+      return updated;
+    });
+
+    try {
+      await prisma.notification.updateMany({
+        where: { userId: targetUserId, requestId: updatedRequest.id },
         data: { isRead: true, type: "SHIFT_SWAP_RESPONDED" },
       });
-
-      await tx.notification.create({
+      await prisma.notification.create({
         data: {
-          userId: updated.userId,
-          requestId: updated.id,
+          userId: updatedRequest.userId,
+          requestId: updatedRequest.id,
           type: decision === "APPROVED" ? "SHIFT_SWAP_APPROVED" : "SHIFT_SWAP_REJECTED",
           title: decision === "APPROVED" ? "Tukar shift disetujui" : "Tukar shift ditolak",
           message: decision === "APPROVED"
@@ -59,9 +62,9 @@ export async function POST(request: Request) {
             : "Karyawan tujuan menolak pengajuan tukar shift Anda.",
         },
       });
-
-      return updated;
-    });
+    } catch (notificationError) {
+      console.error("Swap response notification skipped:", notificationError);
+    }
 
     return NextResponse.json({ success: true, request: updatedRequest });
   } catch (error) {

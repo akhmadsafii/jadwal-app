@@ -10,6 +10,7 @@ export interface ApprovalItem {
   category: RequestCategory;
   description: string;
   date: string;
+  createdAt?: string;
   status: ApprovalStatus;
   shiftBefore?: string;
   shiftAfter?: string;

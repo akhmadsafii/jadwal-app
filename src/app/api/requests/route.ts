@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { forbidden, getAuthUser, unauthorized } from "@/lib/apiAuth";
 
 export async function GET(request: Request) {
   try {
+    const authUser = getAuthUser(request);
+    if (!authUser) return unauthorized();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const userId = searchParams.get("userId");
@@ -14,8 +17,10 @@ export async function GET(request: Request) {
     }
 
     if (userId) {
+      if (authUser.role !== "ADMIN" && authUser.userId !== userId) return forbidden();
       where.userId = userId;
     } else {
+      if (authUser.role !== "ADMIN") return forbidden();
       // Tukar shift antar-karyawan ditanggapi langsung oleh karyawan tujuan,
       // sehingga tidak masuk antrean approval admin.
       where.NOT = {

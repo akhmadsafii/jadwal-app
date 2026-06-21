@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { forbidden, getAuthUser, unauthorized } from "@/lib/apiAuth";
 import { swapShiftAssignments } from "@/lib/swapShiftAssignments";
 import {
   sendWhatsAppMessage,
@@ -147,6 +148,9 @@ async function swapOwnDayAssignments(
 
 export async function PUT(request: Request) {
   try {
+    const authUser = getAuthUser(request);
+    if (!authUser) return unauthorized();
+    if (authUser.role !== "ADMIN") return forbidden();
     const { requestId, status, adminNotes } = await request.json();
 
     if (!requestId || !status) {
@@ -156,6 +160,7 @@ export async function PUT(request: Request) {
       );
     }
 
+    let shouldCreateNotification = false;
     const updatedRequest = await prisma.$transaction(async (tx) => {
       const existing = await tx.shiftRequest.findUnique({
         where: { id: requestId },
@@ -237,11 +242,17 @@ export async function PUT(request: Request) {
         }
       }
 
-      if ((status === "APPROVED" || status === "REJECTED") && existing.status !== status) {
-        await tx.notification.create({
+      shouldCreateNotification = (status === "APPROVED" || status === "REJECTED") && existing.status !== status;
+
+      return updated;
+    });
+
+    if (shouldCreateNotification) {
+      try {
+        await prisma.notification.create({
           data: {
-            userId: updated.userId,
-            requestId: updated.id,
+            userId: updatedRequest.userId,
+            requestId: updatedRequest.id,
             type: status === "APPROVED" ? "REQUEST_APPROVED" : "REQUEST_REJECTED",
             title: status === "APPROVED" ? "Pengajuan disetujui" : "Pengajuan ditolak",
             message: status === "APPROVED"
@@ -249,10 +260,20 @@ export async function PUT(request: Request) {
               : "Pengajuan jadwal Anda ditolak admin. Silakan cek catatan admin.",
           },
         });
+      } catch (notificationError) {
+        console.error("Approval notification skipped:", notificationError);
       }
+    }
 
-      return updated;
-    });
+    void prisma.auditLog.create({
+      data: {
+        userId: authUser.userId,
+        action: `REQUEST_${status}`,
+        entity: "ShiftRequest",
+        entityId: updatedRequest.id,
+        details: JSON.stringify({ requesterId: updatedRequest.userId, adminNotes: adminNotes || null }),
+      },
+    }).catch((error) => console.error("Audit log skipped:", error));
 
     if (updatedRequest.status === "APPROVED" || updatedRequest.status === "REJECTED") {
       const typeLabel = getRequestTypeLabel(

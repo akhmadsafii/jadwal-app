@@ -6,7 +6,24 @@ import { employeeRequestTypeLabels, employeeRequestStatusLabels, employeeRequest
 import { useAuth } from "@/lib/authContext";
 import { formatDateKey, getDateKeyFromApi } from "@/lib/dateKeys";
 
-export default function EmployeeRecentRequests() {
+interface EmployeeRecentRequestsProps {
+  limit?: number;
+  historyMode?: boolean;
+}
+
+function formatCreatedAt(value?: string) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  });
+}
+
+export default function EmployeeRecentRequests({ limit = 5, historyMode = false }: EmployeeRecentRequestsProps) {
   const { user, token } = useAuth();
   const [requests, setRequests] = useState<any[]>([]);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
@@ -92,11 +109,13 @@ export default function EmployeeRecentRequests() {
     <section>
       <div className="flex items-center justify-between mb-2 px-1">
         <h2 className="text-xs text-on-surface-variant uppercase tracking-wider">
-          Pengajuan Terakhir
+          {historyMode ? "Riwayat Pengajuan" : "Pengajuan Terakhir"}
         </h2>
-        <Link href="/pegawai/requests" className="text-[10px] text-primary font-bold hover:underline">
-          LIHAT SEMUA
-        </Link>
+        {!historyMode && (
+          <Link href="/pegawai/requests/history" className="text-[10px] text-primary font-bold hover:underline">
+            LIHAT SEMUA
+          </Link>
+        )}
       </div>
       <div className="space-y-2">
         {cancelError && (
@@ -108,7 +127,7 @@ export default function EmployeeRecentRequests() {
           <div className="p-4 text-center text-sm text-outline bg-surface-container border border-outline-variant rounded-lg">
             Belum ada pengajuan
           </div>
-        ) : requests.slice(0, 5).map((request) => {
+        ) : requests.slice(0, limit).map((request) => {
           const status = request.status.toLowerCase();
           const startDate = formatDateKey(getDateKeyFromApi(request.startDate), { day: "numeric", month: "short" });
           const endDate = request.endDate
@@ -132,6 +151,9 @@ export default function EmployeeRecentRequests() {
                 <p className="text-[10px] text-secondary">
                   {endDate ? `${startDate} - ${endDate}` : startDate}
                   {request.swapWithUser?.name ? ` dengan ${request.swapWithUser.name}` : ""}
+                </p>
+                <p className="text-[10px] text-outline mt-1">
+                  Diajukan: {formatCreatedAt(request.createdAt)}
                 </p>
               </div>
               <span

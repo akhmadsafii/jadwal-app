@@ -27,6 +27,7 @@ model User {
   resetToken        String?
   resetTokenExpiry  DateTime?
   notifications     Notification[]
+  auditLogs         AuditLog[]
 }
 
 enum Role {
@@ -72,6 +73,20 @@ model Notification {
 
   @@index([userId, isRead, createdAt])
   @@index([requestId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId, createdAt])
+  @@index([userId, createdAt])
 }
 
 enum RequestType {

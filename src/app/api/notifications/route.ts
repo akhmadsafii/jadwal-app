@@ -27,9 +27,9 @@ export async function PATCH(request: Request) {
   const userId = getAuthenticatedUserId(request);
   if (!userId) return NextResponse.json({ error: "Sesi tidak valid" }, { status: 401 });
 
-  const { notificationId } = await request.json();
+  const { notificationId, markAll } = await request.json();
   await prisma.notification.updateMany({
-    where: { id: notificationId, userId },
+    where: markAll ? { userId, isRead: false } : { id: notificationId, userId },
     data: { isRead: true },
   });
 

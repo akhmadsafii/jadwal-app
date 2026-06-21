@@ -7,8 +7,10 @@ import ApprovalList from "@/components/admin/ApprovalList";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import { ApprovalItem, RequestCategory } from "@/data/approvalData";
 import { formatDateKey, getDateKeyFromApi } from "@/lib/dateKeys";
+import { useAuth } from "@/lib/authContext";
 
 export default function ApprovalPage() {
+  const { token } = useAuth();
   const [items, setItems] = useState<ApprovalItem[]>([]);
 
   const mapRequestToApproval = (request: any): ApprovalItem => {
@@ -35,6 +37,16 @@ export default function ApprovalPage() {
         })
       : "";
     const isOwnDaySwap = request.type === "TUKAR_SHIFT" && !request.swapWithUserId && request.endDate;
+    const createdAt = request.createdAt
+      ? new Date(request.createdAt).toLocaleString("id-ID", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Asia/Jakarta",
+        })
+      : "-";
     const description = request.type === "TUKAR_SHIFT"
       ? isOwnDaySwap
         ? request.description || `Tukar hari ${startDate} dengan ${endDate}`
@@ -49,12 +61,15 @@ export default function ApprovalPage() {
       category: categoryByType[request.type] || "TIME_OFF",
       description,
       date: isOwnDaySwap ? `${startDate} - ${endDate}` : startDate,
+      createdAt,
       status: request.status,
     };
   };
 
   const fetchRequests = async () => {
-    const response = await fetch("/api/requests");
+    const response = await fetch("/api/requests", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!response.ok) return;
     const data = await response.json();
     setItems((data.requests || []).map(mapRequestToApproval));
@@ -62,12 +77,12 @@ export default function ApprovalPage() {
 
   useEffect(() => {
     fetchRequests();
-  }, []);
+  }, [token]);
 
   const updateStatus = async (id: string, status: "APPROVED" | "REJECTED") => {
     const response = await fetch("/api/requests/update", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ requestId: id, status }),
     });
     if (response.ok) {
@@ -78,10 +93,12 @@ export default function ApprovalPage() {
   };
 
   const handleApprove = (id: string) => {
+    if (!confirm("Setujui pengajuan ini? Jadwal akan diperbarui sesuai pengajuan.")) return;
     updateStatus(id, "APPROVED");
   };
 
   const handleReject = (id: string) => {
+    if (!confirm("Tolak pengajuan ini? Status pengajuan akan berubah menjadi ditolak.")) return;
     updateStatus(id, "REJECTED");
   };
 

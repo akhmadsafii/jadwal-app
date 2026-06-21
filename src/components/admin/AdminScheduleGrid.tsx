@@ -8,7 +8,7 @@ interface Employee {
   name: string;
   nip: string;
   position: string | null;
-  schedule: { date: string; dateKey: string; shiftType: string; fromRequest?: boolean; requestStatus?: string }[];
+  schedule: { date: string; dateKey: string; shiftType: string; pendingShiftType?: string; fromRequest?: boolean; requestStatus?: string }[];
 }
 
 interface AdminScheduleGridProps {
@@ -77,13 +77,13 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
 
   // Create a map of schedules for quick lookup
   // Key: "userId-dateKey", Value: roster value plus request status.
-  const scheduleMap = new Map<string, { code: string; fromRequest: boolean; requestStatus?: string }>();
+  const scheduleMap = new Map<string, { code: string; pendingCode: string; fromRequest: boolean; requestStatus?: string }>();
   employees.forEach((emp) => {
     emp.schedule.forEach((s) => {
-      const dateObj = new Date(s.date);
-      const dayKey = dateObj.getDate();
+      const dayKey = Number(s.dateKey.split("-")[2]);
       scheduleMap.set(`${emp.id}-${dayKey}`, {
         code: mapShiftToCode(s.shiftType),
+        pendingCode: s.pendingShiftType ? mapShiftToCode(s.pendingShiftType) : "",
         fromRequest: s.fromRequest || false,
         requestStatus: s.requestStatus,
       });
@@ -160,10 +160,11 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
 
                   {/* Schedule Cells - render based on actual dates */}
                   {Array.from({ length: actualDaysInMonth }, (_, dayIdx) => {
-                    const scheduleInfo = scheduleMap.get(`${emp.id}-${dayIdx + 1}`) || { code: "", fromRequest: false };
+                    const scheduleInfo = scheduleMap.get(`${emp.id}-${dayIdx + 1}`) || { code: "", pendingCode: "", fromRequest: false };
                     const scheduleCode = scheduleInfo.code;
                     const fromRequest = scheduleInfo.fromRequest;
                     const isPending = scheduleInfo.requestStatus === "PENDING";
+                    const showPreviousAndRequested = isPending && Boolean(scheduleInfo.pendingCode) && scheduleInfo.pendingCode !== scheduleCode;
                     const dayIndex = (dayNamesStartIndex + dayIdx) % 7;
                     const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(dayIdx + 1).padStart(2, "0")}`;
                     const holiday = holidays.get(dateKey);
@@ -178,7 +179,7 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
                         )} ${isRedDate ? "brightness-95 ring-1 ring-inset ring-error/20" : ""}`}
                         title={[holiday?.name, isPending ? "Pengajuan masih menunggu persetujuan" : fromRequest ? "Dari pengajuan pegawai" : ""].filter(Boolean).join(" - ")}
                       >
-                        {fromRequest ? <span className="relative">{scheduleCode}<span className={`absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full ${isPending ? "bg-warning" : "bg-primary"}`}></span></span> : scheduleCode}
+                        {fromRequest ? <span className="relative">{showPreviousAndRequested ? `${scheduleCode}→${scheduleInfo.pendingCode}` : scheduleCode}<span className={`absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full ${isPending ? "bg-warning" : "bg-primary"}`}></span></span> : scheduleCode}
                       </td>
                     );
                   })}

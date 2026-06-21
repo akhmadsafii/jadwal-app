@@ -31,6 +31,12 @@ const pageMeta = {
     icon: "pending_actions",
     accent: "bg-primary-container text-on-primary-container",
   },
+  "/pegawai/requests/history": {
+    title: "Riwayat Pengajuan",
+    subtitle: "Seluruh pengajuan jadwal Anda",
+    icon: "history",
+    accent: "bg-primary-container text-on-primary-container",
+  },
   "/pegawai/notifications": {
     title: "Notifikasi",
     subtitle: "Pengajuan dan pembaruan jadwal Anda",
@@ -112,6 +118,16 @@ export default function EmployeeTopBar() {
     }).catch(() => undefined);
   };
 
+  const markAllAsRead = async () => {
+    if (!token || unreadCount === 0) return;
+    setNotifications((current) => current.map((notification) => ({ ...notification, isRead: true })));
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ markAll: true }),
+    }).catch(() => undefined);
+  };
+
   const openNotification = async (notification: AppNotification) => {
     if (notification.type !== "SHIFT_SWAP_REQUEST") {
       await markAsRead(notification.id);
@@ -185,10 +201,14 @@ export default function EmployeeTopBar() {
             {showNotifications && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
-                <div className="absolute right-0 top-full mt-2 w-[min(22rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant z-50">
+                <div className="fixed inset-x-4 top-24 max-h-[70vh] overflow-y-auto bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant z-50 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
                   <div className="px-4 py-3 border-b border-outline-variant flex items-center justify-between">
                     <p className="text-sm font-bold text-on-surface">Notifikasi</p>
-                    {unreadCount > 0 && <span className="text-[10px] text-primary font-bold">{unreadCount} baru</span>}
+                    {unreadCount > 0 && (
+                      <button onClick={markAllAsRead} className="text-[10px] text-primary font-bold">
+                        Tandai semua dibaca
+                      </button>
+                    )}
                   </div>
                   {notifications.length === 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-on-surface-variant">Belum ada notifikasi</p>

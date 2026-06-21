@@ -111,6 +111,11 @@ export default function ApprovalList({ items, onApprove, onReject }: ApprovalLis
                 </div>
                 <p className="text-sm text-on-surface">{item.description}</p>
                 <p className="text-[10px] text-outline mt-1">{item.date}</p>
+                {item.createdAt && (
+                  <p className="text-[10px] text-outline mt-1">
+                    Diajukan: {item.createdAt}
+                  </p>
+                )}
               </div>
 
               {/* Action Buttons */}

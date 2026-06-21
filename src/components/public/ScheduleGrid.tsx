@@ -17,7 +17,7 @@ interface PublicScheduleEmployee {
   id: string;
   name: string;
   nip: string;
-  schedule: { date: string; dateKey?: string; shiftType: string; requestStatus?: string }[];
+  schedule: { date: string; dateKey?: string; shiftType: string; pendingShiftType?: string; requestStatus?: string }[];
 }
 
 const shiftTypeToCode: Record<string, string> = {
@@ -190,6 +190,7 @@ export default function ScheduleGrid({
                     Number((assignment.dateKey || getDateKeyFromApi(assignment.date)).split("-")[2]),
                     {
                       code: shiftTypeToCode[assignment.shiftType] || "",
+                      pendingCode: assignment.pendingShiftType ? shiftTypeToCode[assignment.pendingShiftType] || "" : "",
                       requestStatus: assignment.requestStatus,
                     },
                   ])
@@ -212,9 +213,10 @@ export default function ScheduleGrid({
 
                   {/* Schedule Cells */}
                   {Array.from({ length: actualDaysInMonth }, (_, idx) => {
-                    const scheduleInfo = scheduleByDay.get(idx + 1) || { code: "", requestStatus: undefined };
+                    const scheduleInfo = scheduleByDay.get(idx + 1) || { code: "", pendingCode: "", requestStatus: undefined };
                     const code = scheduleInfo.code;
                     const isPending = scheduleInfo.requestStatus === "PENDING";
+                    const showPreviousAndRequested = isPending && Boolean(scheduleInfo.pendingCode) && scheduleInfo.pendingCode !== code;
                     const dayIndex = (dayNamesStartIndex + idx) % 7;
                     const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(idx + 1).padStart(2, "0")}`;
                     const holiday = holidays.get(dateKey);
@@ -229,7 +231,7 @@ export default function ScheduleGrid({
                         title={[holiday?.name, isPending ? "Pengajuan masih menunggu persetujuan" : ""].filter(Boolean).join(" - ")}
                       >
                         <span className="relative inline-flex">
-                          {code}
+                          {showPreviousAndRequested ? `${code}→${scheduleInfo.pendingCode}` : code}
                           {isPending && <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-warning" />}
                         </span>
                       </td>

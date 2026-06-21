@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { forbidden, getAuthUser, unauthorized } from "@/lib/apiAuth";
 import {
   getWhatsAppAdminNumbers,
   sendWhatsAppMessages,
@@ -38,9 +39,28 @@ function getRequestTypeLabel(type: string, isDaySwap: boolean) {
   return labels[type] || type;
 }
 
+function getShiftLabel(shiftType?: string) {
+  const labels: Record<string, string> = {
+    PAGI: "Shift Pagi",
+    MIDDLE: "Shift Middle",
+    SIANG: "Shift Siang",
+    MALAM: "Shift Malam",
+    LIBUR: "Libur",
+    CUTI: "Cuti",
+    SAKIT: "Izin / Sakit",
+    TURUN: "Turun Jaga",
+  };
+  return shiftType ? labels[shiftType] || shiftType : "Belum diatur";
+}
+
 export async function POST(request: Request) {
   try {
-    const { userId, type, startDate, endDate, description, swapWithUserId } = await request.json();
+    const authUser = getAuthUser(request);
+    if (!authUser) return unauthorized();
+    if (authUser.role !== "EMPLOYEE") return forbidden();
+
+    const { type, startDate, endDate, description, swapWithUserId } = await request.json();
+    const userId = authUser.userId;
     const requestType = type === "TUKAR_HARI" ? "TUKAR_SHIFT" : type;
 
     if (!userId || !type || !startDate) {
@@ -129,34 +149,22 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.notification.create({
-        data: {
-          userId,
-          requestId: createdRequest.id,
-          type: isEmployeeSwap ? "SHIFT_SWAP_SUBMITTED" : "REQUEST_SUBMITTED",
-          title: isEmployeeSwap ? "Permintaan tukar shift dikirim" : "Pengajuan jadwal dikirim",
-          message: isEmployeeSwap
-            ? "Permintaan tukar shift Anda menunggu persetujuan karyawan tujuan."
-            : "Pengajuan jadwal Anda menunggu persetujuan admin.",
-        },
-      });
-
-      if (isEmployeeSwap) {
-        await tx.notification.create({
-          data: {
-            userId: swapWithUserId,
-            requestId: createdRequest.id,
-            type: "SHIFT_SWAP_REQUEST",
-            title: "Permintaan tukar shift",
-            message: "Ada permintaan tukar shift yang menunggu persetujuan Anda.",
-          },
-        });
-      }
-
       return createdRequest;
     });
 
-    const [requester, targetUser, admins] = await Promise.all([
+    void prisma.auditLog.create({
+      data: {
+        userId,
+        action: "REQUEST_CREATED",
+        entity: "ShiftRequest",
+        entityId: shiftRequest.id,
+        details: JSON.stringify({ type: requestType, startDate, endDate, swapWithUserId: swapWithUserId || null }),
+      },
+    }).catch((error) => console.error("Audit log skipped:", error));
+
+    const dayAfterStart = new Date(parsedStartDate);
+    dayAfterStart.setDate(dayAfterStart.getDate() + 1);
+    const [requester, targetUser, admins, swapAssignments] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: { name: true, nip: true },
@@ -174,24 +182,64 @@ export async function POST(request: Request) {
         },
         select: { id: true, phone: true },
       }),
+      isEmployeeSwap && swapWithUserId
+        ? prisma.shiftAssignment.findMany({
+            where: {
+              userId: { in: [userId, swapWithUserId] },
+              date: { gte: parsedStartDate, lt: dayAfterStart },
+            },
+            select: { userId: true, shiftType: true },
+          })
+        : Promise.resolve([]),
     ]);
     const typeLabel = getRequestTypeLabel(requestType, isDaySwap);
     const dateLabel = isDaySwap
       ? `${formatRequestDate(parsedStartDate)} -> ${formatRequestDate(parsedEndDate)}`
       : formatRequestDate(parsedStartDate);
+    const shiftByUserId = new Map(swapAssignments.map((assignment) => [assignment.userId, assignment.shiftType]));
+    const requesterShiftLabel = getShiftLabel(shiftByUserId.get(userId));
+    const targetShiftLabel = getShiftLabel(swapWithUserId ? shiftByUserId.get(swapWithUserId) : undefined);
+
+    try {
+      const notifications = [{
+        userId,
+        requestId: shiftRequest.id,
+        type: isEmployeeSwap ? "SHIFT_SWAP_SUBMITTED" : "REQUEST_SUBMITTED",
+        title: isEmployeeSwap ? "Permintaan tukar shift dikirim" : "Pengajuan jadwal dikirim",
+        message: isEmployeeSwap && targetUser
+          ? `Permintaan tukar shift dengan ${targetUser.name || "karyawan tujuan"} pada ${dateLabel} menunggu persetujuan.`
+          : `Pengajuan ${typeLabel} untuk ${dateLabel} menunggu persetujuan admin.`,
+      }];
+      if (isEmployeeSwap && swapWithUserId && targetUser) {
+        notifications.push({
+          userId: swapWithUserId,
+          requestId: shiftRequest.id,
+          type: "SHIFT_SWAP_REQUEST",
+          title: "Permintaan tukar shift",
+          message: `${requester?.name || "Pegawai"} mengajukan tukar shift pada ${dateLabel}. Shift pengaju: ${requesterShiftLabel}; shift Anda: ${targetShiftLabel}.`,
+        });
+      }
+      await prisma.notification.createMany({ data: notifications });
+    } catch (notificationError) {
+      console.error("Create request notification skipped:", notificationError);
+    }
     const adminNumbers = isEmployeeSwap
       ? []
       : [...admins.map((admin) => admin.phone).filter((phone): phone is string => Boolean(phone)), ...getWhatsAppAdminNumbers()];
     if (!isEmployeeSwap && admins.length > 0) {
-      await prisma.notification.createMany({
-        data: admins.map((admin) => ({
-          userId: admin.id,
-          requestId: shiftRequest.id,
-          type: "ADMIN_APPROVAL_REQUIRED",
-          title: "Pengajuan baru menunggu approval",
-          message: `${requester?.name || "Pegawai"} mengajukan ${typeLabel} untuk ${dateLabel}.`,
-        })),
-      });
+      try {
+        await prisma.notification.createMany({
+          data: admins.map((admin) => ({
+            userId: admin.id,
+            requestId: shiftRequest.id,
+            type: "ADMIN_APPROVAL_REQUIRED",
+            title: "Pengajuan baru menunggu approval",
+            message: `${requester?.name || "Pegawai"} mengajukan ${typeLabel} untuk ${dateLabel}.`,
+          })),
+        });
+      } catch (notificationError) {
+        console.error("Admin notification skipped:", notificationError);
+      }
     }
     console.info("WhatsApp admin notification targets:", {
       adminUsersWithPhone: admins.length,
@@ -227,7 +275,10 @@ export async function POST(request: Request) {
                 "",
                 whatsAppCodeBlock([
                   `Pengaju : ${requester?.name || "Pegawai"}`,
+                  `Tujuan  : ${targetUser.name || "Pegawai"}`,
                   `Tanggal : ${dateLabel}`,
+                  `Shift pengaju : ${requesterShiftLabel}`,
+                  `Shift Anda    : ${targetShiftLabel}`,
                   "Status  : Menunggu persetujuan Anda",
                 ]),
                 "",

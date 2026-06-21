@@ -30,6 +30,7 @@ interface ShiftRequest {
   startDate: string;
   endDate?: string | null;
   status: RequestStatus;
+  createdAt?: string;
 }
 
 interface EmployeeNotification {
@@ -151,6 +152,17 @@ function formatShortDate(dateKey: string) {
     weekday: "short",
     day: "numeric",
     month: "short",
+  });
+}
+
+function formatRequestCreatedAt(value?: string) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
   });
 }
 
@@ -516,7 +528,10 @@ export default function PegawaiPage() {
 
         {requests.length > 0 && (
           <section className="mt-5 mb-2">
-            <h2 className="text-sm font-bold text-on-surface mb-3">Pengajuan Terakhir</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-on-surface">Pengajuan Terakhir</h2>
+              <Link href="/pegawai/requests/history" className="text-xs font-bold text-primary">Lihat semua</Link>
+            </div>
             <div className="space-y-2">
               {requests.slice(0, 3).map((request) => {
                 const status = requestStatusMeta[request.status];
@@ -527,7 +542,8 @@ export default function PegawaiPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-on-surface truncate">{getRequestLabel(request)}</p>
-                      <p className="text-xs text-on-surface-variant">{formatShortDate(getDateKeyFromApi(request.startDate))}</p>
+                      <p className="text-xs text-on-surface-variant">Jadwal: {formatShortDate(getDateKeyFromApi(request.startDate))}</p>
+                      <p className="text-[10px] text-outline mt-1">Diajukan: {formatRequestCreatedAt(request.createdAt)}</p>
                     </div>
                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${status.color}`}>{status.label}</span>
                   </div>

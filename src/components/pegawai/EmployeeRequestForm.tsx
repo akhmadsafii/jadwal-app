@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/authContext";
 import { addDays, formatDateKey, getLocalDateKey } from "@/lib/dateKeys";
 
 export default function EmployeeRequestForm() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [submittedRequest, setSubmittedRequest] = useState<{
@@ -59,7 +59,7 @@ export default function EmployeeRequestForm() {
   };
 
   const validateBeforeSubmit = () => {
-    if (!user?.id) {
+    if (!user?.id || !token) {
       setStatus("error");
       setMessage("Sesi login tidak ditemukan. Silakan login ulang.");
       return false;
@@ -97,7 +97,7 @@ export default function EmployeeRequestForm() {
     try {
       const response = await fetch("/api/requests/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           userId,
           type: isDaySwapRequest ? "TUKAR_HARI" : requestType,

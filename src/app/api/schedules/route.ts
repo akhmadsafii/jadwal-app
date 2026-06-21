@@ -102,7 +102,8 @@ export async function GET(request: Request) {
         LIBUR: "LIBUR",
       };
 
-      const requestDates = new Map<string, string>();
+      const approvedRequestDates = new Map<string, string>();
+      const pendingRequestDates = new Map<string, string>();
       const requestMeta = new Map<string, { requestId: string; requestStatus: string; requestType: string }>();
       const lockedRequestDates = new Set<string>();
       visibleRequests.forEach((req) => {
@@ -117,12 +118,15 @@ export async function GET(request: Request) {
             requestType: req.type,
           });
           const shiftType = requestTypeToShiftType[req.type];
-          if (shiftType && req.userId === userId) requestDates.set(dateKey, shiftType);
+          if (shiftType && req.userId === userId) {
+            if (req.status === "APPROVED") approvedRequestDates.set(dateKey, shiftType);
+            if (req.status === "PENDING") pendingRequestDates.set(dateKey, shiftType);
+          }
         });
       });
 
       // Build schedule entries
-      const scheduleEntries: { date: Date; dateKey: string; shiftType: string; fromRequest: boolean; requestStatus?: string; requestId?: string; requestType?: string }[] = [];
+      const scheduleEntries: { date: Date; dateKey: string; shiftType: string; pendingShiftType?: string; fromRequest: boolean; requestStatus?: string; requestId?: string; requestType?: string }[] = [];
 
       // Add regular assignments
       userSchedule.forEach((s) => {
@@ -130,7 +134,8 @@ export async function GET(request: Request) {
         scheduleEntries.push({
           date: s.date,
           dateKey,
-          shiftType: requestDates.get(dateKey) || s.shiftType,
+          shiftType: approvedRequestDates.get(dateKey) || s.shiftType,
+          pendingShiftType: pendingRequestDates.get(dateKey),
           fromRequest: requestMeta.has(dateKey),
           requestStatus: requestMeta.get(dateKey)?.requestStatus,
           requestId: requestMeta.get(dateKey)?.requestId,
@@ -144,13 +149,15 @@ export async function GET(request: Request) {
         getRequestDates(req).forEach((date) => {
           const dateKey = toDateKey(date);
           if (!existingDates.has(dateKey)) {
-            const shiftType = requestDates.get(dateKey);
-            if (shiftType) {
+            const approvedShiftType = approvedRequestDates.get(dateKey);
+            const pendingShiftType = pendingRequestDates.get(dateKey);
+            if (approvedShiftType || pendingShiftType || requestMeta.has(dateKey)) {
               scheduleEntries.push({
                 date,
                 dateKey,
-                shiftType,
+                shiftType: approvedShiftType || pendingShiftType || "",
                 fromRequest: true,
+                pendingShiftType: approvedShiftType ? undefined : pendingShiftType,
                 requestStatus: requestMeta.get(dateKey)?.requestStatus,
                 requestId: requestMeta.get(dateKey)?.requestId,
                 requestType: requestMeta.get(dateKey)?.requestType,
@@ -237,12 +244,14 @@ export async function GET(request: Request) {
         date: Date;
         dateKey: string;
         shiftType: string;
+        pendingShiftType?: string;
         fromRequest: boolean;
         requestStatus?: string;
         requestId?: string;
         requestType?: string;
       }[] = [];
-      const requestDates = new Map<string, string>();
+      const approvedRequestDates = new Map<string, string>();
+      const pendingRequestDates = new Map<string, string>();
       const requestMeta = new Map<string, { requestId: string; requestStatus: string; requestType: string }>();
       const lockedRequestDates = new Set<string>();
 
@@ -258,7 +267,10 @@ export async function GET(request: Request) {
               requestType: req.type,
             });
             const shiftType = requestTypeToShiftType[req.type];
-            if (shiftType && req.userId === emp.id) requestDates.set(dateKey, shiftType);
+            if (shiftType && req.userId === emp.id) {
+              if (req.status === "APPROVED") approvedRequestDates.set(dateKey, shiftType);
+              if (req.status === "PENDING") pendingRequestDates.set(dateKey, shiftType);
+            }
           });
         });
 
@@ -268,7 +280,8 @@ export async function GET(request: Request) {
         scheduleEntries.push({
           date: s.date,
           dateKey,
-          shiftType: requestDates.get(dateKey) || s.shiftType,
+          shiftType: approvedRequestDates.get(dateKey) || s.shiftType,
+          pendingShiftType: pendingRequestDates.get(dateKey),
           fromRequest: requestMeta.has(dateKey),
           requestStatus: requestMeta.get(dateKey)?.requestStatus,
           requestId: requestMeta.get(dateKey)?.requestId,
@@ -284,12 +297,14 @@ export async function GET(request: Request) {
           getRequestDates(req).forEach((date) => {
             const dateKey = toDateKey(date);
             if (!existingDates.has(dateKey)) {
-              const shiftType = requestDates.get(dateKey);
-              if (shiftType) {
+              const approvedShiftType = approvedRequestDates.get(dateKey);
+              const pendingShiftType = pendingRequestDates.get(dateKey);
+              if (approvedShiftType || pendingShiftType || requestMeta.has(dateKey)) {
                 scheduleEntries.push({
                   date,
                   dateKey,
-                  shiftType,
+                  shiftType: approvedShiftType || pendingShiftType || "",
+                  pendingShiftType: approvedShiftType ? undefined : pendingShiftType,
                   fromRequest: true,
                   requestStatus: requestMeta.get(dateKey)?.requestStatus,
                   requestId: requestMeta.get(dateKey)?.requestId,
@@ -321,13 +336,15 @@ export async function GET(request: Request) {
 
       for (let day = 1; day <= daysInMonth; day += 1) {
         const dateKey = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const shiftType = scheduleByDate.get(dateKey) || "LIBUR";
+        // Tanggal tanpa assignment belum berarti libur; biarkan kosong sampai
+        // admin benar-benar menetapkan jadwalnya.
+        const shiftType = scheduleByDate.get(dateKey);
 
-        if (shiftTypes.includes(shiftType as ShiftTypeKey)) {
+        if (shiftType && shiftTypes.includes(shiftType as ShiftTypeKey)) {
           shiftCounts[shiftType as ShiftTypeKey] += 1;
         }
-        if (workingShiftTypes.has(shiftType)) totalWorkDays += 1;
-        if (absenceShiftTypes.has(shiftType)) absenceDays += 1;
+        if (shiftType && workingShiftTypes.has(shiftType)) totalWorkDays += 1;
+        if (shiftType && absenceShiftTypes.has(shiftType)) absenceDays += 1;
       }
     });
 

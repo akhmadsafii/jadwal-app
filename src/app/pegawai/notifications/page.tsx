@@ -71,13 +71,30 @@ export default function EmployeeNotificationsPage() {
     }
   };
 
+  const markAllAsRead = async () => {
+    if (!token || !notifications.some((notification) => !notification.isRead)) return;
+    setNotifications((current) => current.map((notification) => ({ ...notification, isRead: true })));
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ markAll: true }),
+    });
+  };
+
   return (
     <div className="min-h-screen pb-[96px] bg-background">
       <EmployeeTopBar />
       <main className="px-container-margin max-w-2xl mx-auto py-4">
-        <div className="mb-4">
-          <h2 className="text-lg font-bold text-on-surface">Riwayat Notifikasi</h2>
-          <p className="text-sm text-on-surface-variant mt-1">Permintaan tukar shift dan pembaruan status pengajuan.</p>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-on-surface">Riwayat Notifikasi</h2>
+            <p className="text-sm text-on-surface-variant mt-1">Permintaan tukar shift dan pembaruan status pengajuan.</p>
+          </div>
+          {notifications.some((notification) => !notification.isRead) && (
+            <button onClick={markAllAsRead} className="flex-none text-xs font-bold text-primary">
+              Tandai semua dibaca
+            </button>
+          )}
         </div>
 
         {isLoading ? (
