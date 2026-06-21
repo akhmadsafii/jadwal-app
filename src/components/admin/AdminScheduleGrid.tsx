@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { dayNames, getDaysInMonth } from "@/data/publicData";
 import { useIndonesiaHolidays } from "@/hooks/useIndonesiaHolidays";
 
@@ -74,6 +75,12 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
   const dayNamesStartIndex = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
   const holidays = useIndonesiaHolidays(year);
+  const [todayKey, setTodayKey] = useState("");
+
+  useEffect(() => {
+    const today = new Date();
+    setTodayKey(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`);
+  }, []);
 
   // Create a map of schedules for quick lookup
   // Key: "userId-dateKey", Value: roster value plus request status.
@@ -111,29 +118,31 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
                 const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
                 const holiday = holidays.get(dateKey);
                 const isRedDate = dayName === "Mg" || Boolean(holiday);
+                const isToday = dateKey === todayKey;
 
                 return (
                   <th
                     key={i + 1}
                     className={`min-w-10 py-2 text-center border-r border-outline-variant ${
-                      isRedDate ? "bg-error-container/20" : ""
+                      isToday ? "bg-primary text-on-primary border-x-2 border-primary" : isRedDate ? "bg-error-container/20" : ""
                     }`}
                     title={holiday?.name || (dayName === "Mg" ? "Minggu" : "")}
                   >
                     <div
                       className={`text-[10px] ${
-                        isRedDate ? "text-error" : "text-on-surface-variant"
+                        isToday ? "text-on-primary" : isRedDate ? "text-error" : "text-on-surface-variant"
                       }`}
                     >
                       {dayName}
                     </div>
                     <div
                       className={`text-xs ${
-                        isRedDate ? "text-error font-bold" : "text-on-surface"
+                        isToday ? "text-on-primary font-bold" : isRedDate ? "text-error font-bold" : "text-on-surface"
                       }`}
                     >
                       {i + 1}
                     </div>
+                    {isToday && <div className="text-[7px] font-bold mt-0.5 tracking-wide">HARI INI</div>}
                   </th>
                 );
               })}
@@ -169,6 +178,7 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
                     const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(dayIdx + 1).padStart(2, "0")}`;
                     const holiday = holidays.get(dateKey);
                     const isRedDate = dayNames[dayIndex] === "Mg" || Boolean(holiday);
+                    const isToday = dateKey === todayKey;
 
                     return (
                       <td
@@ -176,7 +186,7 @@ export default function AdminScheduleGrid({ selectedMonth, employees = [] }: Adm
                         className={`min-w-10 h-10 text-center border-r border-outline-variant text-xs ${getCellClass(
                           scheduleCode,
                           fromRequest
-                        )} ${isRedDate ? "brightness-95 ring-1 ring-inset ring-error/20" : ""}`}
+                        )} ${isToday ? "border-x-2 border-primary ring-2 ring-inset ring-primary shadow-[inset_0_0_0_9999px_rgba(0,83,219,0.16)]" : isRedDate ? "brightness-95 ring-1 ring-inset ring-error/20" : ""}`}
                         title={[holiday?.name, isPending ? "Pengajuan masih menunggu persetujuan" : fromRequest ? "Dari pengajuan pegawai" : ""].filter(Boolean).join(" - ")}
                       >
                         {fromRequest ? <span className="relative">{showPreviousAndRequested ? `${scheduleCode}→${scheduleInfo.pendingCode}` : scheduleCode}<span className={`absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full ${isPending ? "bg-warning" : "bg-primary"}`}></span></span> : scheduleCode}

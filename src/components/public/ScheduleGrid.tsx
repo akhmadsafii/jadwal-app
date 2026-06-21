@@ -85,6 +85,7 @@ export default function ScheduleGrid({
   const year = selectedMonth?.year || new Date().getFullYear();
   const [fetchedEmployees, setFetchedEmployees] = useState<PublicScheduleEmployee[]>([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [todayKey, setTodayKey] = useState("");
 
   // Get actual days in month if selectedMonth is provided
   const actualDaysInMonth = selectedMonth
@@ -97,6 +98,11 @@ export default function ScheduleGrid({
   const visibleEmployees = employees ?? fetchedEmployees;
   const loading = isLoading || isFetching;
   const holidays = useIndonesiaHolidays(year);
+
+  useEffect(() => {
+    const today = new Date();
+    setTodayKey(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`);
+  }, []);
 
   useEffect(() => {
     if (employees) return;
@@ -134,29 +140,31 @@ export default function ScheduleGrid({
                 const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
                 const holiday = holidays.get(dateKey);
                 const isRedDate = dayName === "Mg" || Boolean(holiday);
+                const isToday = dateKey === todayKey;
 
                 return (
                   <th
                     key={i + 1}
                     className={`min-w-[40px] py-2 text-center border-r border-outline-variant ${
-                      isRedDate ? "bg-error-container/20" : ""
+                      isToday ? "bg-primary text-on-primary border-x-2 border-primary" : isRedDate ? "bg-error-container/20" : ""
                     }`}
                     title={holiday?.name || (dayName === "Mg" ? "Minggu" : "")}
                   >
                     <div
                       className={`text-[10px] ${
-                        isRedDate ? "text-error" : "text-on-surface-variant"
+                        isToday ? "text-on-primary" : isRedDate ? "text-error" : "text-on-surface-variant"
                       }`}
                     >
                       {dayName}
                     </div>
                     <div
                       className={`text-xs ${
-                        isRedDate ? "text-error font-bold" : "text-on-surface"
+                        isToday ? "text-on-primary font-bold" : isRedDate ? "text-error font-bold" : "text-on-surface"
                       }`}
                     >
                       {i + 1}
                     </div>
+                    {isToday && <div className="text-[7px] font-bold mt-0.5 tracking-wide">HARI INI</div>}
                   </th>
                 );
               })}
@@ -221,13 +229,14 @@ export default function ScheduleGrid({
                     const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(idx + 1).padStart(2, "0")}`;
                     const holiday = holidays.get(dateKey);
                     const isRedDate = dayNames[dayIndex] === "Mg" || Boolean(holiday);
+                    const isToday = dateKey === todayKey;
 
                     return (
                       <td
                         key={idx}
                         className={`min-w-[40px] h-10 text-center border-r border-outline-variant text-xs ${getCellClass(
                           code
-                        )} ${isRedDate ? "brightness-95 ring-1 ring-inset ring-error/20" : ""}`}
+                        )} ${isToday ? "border-x-2 border-primary ring-2 ring-inset ring-primary shadow-[inset_0_0_0_9999px_rgba(0,83,219,0.16)]" : isRedDate ? "brightness-95 ring-1 ring-inset ring-error/20" : ""}`}
                         title={[holiday?.name, isPending ? "Pengajuan masih menunggu persetujuan" : ""].filter(Boolean).join(" - ")}
                       >
                         <span className="relative inline-flex">
