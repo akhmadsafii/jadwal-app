@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getAuthUser } from "@/lib/apiAuth";
 
 function toDateKey(date: Date) {
   const year = date.getFullYear();
@@ -54,6 +55,8 @@ export async function GET(request: Request) {
     const month = searchParams.get("month");
     const year = searchParams.get("year");
     const userId = searchParams.get("userId");
+    const authUser = getAuthUser(request);
+    const includeDrafts = searchParams.get("includeDrafts") === "1" && authUser?.role === "ADMIN";
 
     const now = new Date();
     const targetMonth = month ? parseInt(month) : now.getMonth() + 1;
@@ -192,6 +195,15 @@ export async function GET(request: Request) {
           },
           orderBy: { date: "asc" },
         },
+        shiftDraftAssignments: includeDrafts ? {
+          where: {
+            date: {
+              gte: monthStart,
+              lt: monthEnd,
+            },
+          },
+          orderBy: { date: "asc" },
+        } : false,
         shiftRequests: {
           where: {
             status: "APPROVED",
@@ -239,6 +251,15 @@ export async function GET(request: Request) {
     };
 
     const responseEmployees = employees.map((emp) => {
+      const effectiveAssignments = includeDrafts && emp.shiftDraftAssignments.length > 0
+        ? [
+            ...emp.shiftAssignments.filter((assignment) => (
+              !emp.shiftDraftAssignments.some((draft) => toDateKey(draft.date) === toDateKey(assignment.date))
+            )),
+            ...emp.shiftDraftAssignments,
+          ].sort((a, b) => a.date.getTime() - b.date.getTime())
+        : emp.shiftAssignments;
+
       // Combine schedule assignments with request-based shifts
       const scheduleEntries: {
         date: Date;
@@ -275,7 +296,7 @@ export async function GET(request: Request) {
         });
 
       // Add regular assignments
-      emp.shiftAssignments.forEach((s) => {
+      effectiveAssignments.forEach((s) => {
         const dateKey = toDateKey(s.date);
         scheduleEntries.push({
           date: s.date,
@@ -290,7 +311,7 @@ export async function GET(request: Request) {
       });
 
       // Add approved request shifts (only if not already in schedule)
-      const existingDates = new Set(emp.shiftAssignments.map((s) => toDateKey(s.date)));
+      const existingDates = new Set(effectiveAssignments.map((s) => toDateKey(s.date)));
       approvedRequests
         .filter((req) => req.userId === emp.id)
         .forEach((req) => {
@@ -366,6 +387,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       employees: responseEmployees,
+      hasDraft: includeDrafts && employees.some((employee) => employee.shiftDraftAssignments.length > 0),
       monthlyStats: calculatedMonthlyStats,
       shiftCounts,
       totalAssignments,

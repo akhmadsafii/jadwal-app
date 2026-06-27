@@ -9,6 +9,7 @@ import {
   whatsAppText,
   whatsAppTitle,
 } from "@/lib/whatsapp";
+import { createApprovalLink, createApprovalLinkToken } from "@/lib/approvalLinks";
 
 function parseLocalDate(dateString: string) {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -226,6 +227,19 @@ export async function POST(request: Request) {
     const adminNumbers = isEmployeeSwap
       ? []
       : [...admins.map((admin) => admin.phone).filter((phone): phone is string => Boolean(phone)), ...getWhatsAppAdminNumbers()];
+    const adminApprovalLink = !isEmployeeSwap
+      ? createApprovalLink(request, createApprovalLinkToken({
+          requestId: shiftRequest.id,
+          approverRole: "ADMIN",
+        }))
+      : null;
+    const employeeApprovalLink = isEmployeeSwap && swapWithUserId
+      ? createApprovalLink(request, createApprovalLinkToken({
+          requestId: shiftRequest.id,
+          approverRole: "EMPLOYEE",
+          approverUserId: swapWithUserId,
+        }))
+      : null;
     if (!isEmployeeSwap && admins.length > 0) {
       try {
         await prisma.notification.createMany({
@@ -261,7 +275,8 @@ export async function POST(request: Request) {
             whatsAppField("Tanggal", dateLabel),
             whatsAppField("Status", "Menunggu persetujuan admin"),
             "",
-            "Silakan buka aplikasi untuk melihat detail pengajuan."
+            "*Tindak lanjuti pengajuan:*",
+            adminApprovalLink
           ),
         })),
         ...(targetUser && isEmployeeSwap
@@ -282,7 +297,8 @@ export async function POST(request: Request) {
                   "Status  : Menunggu persetujuan Anda",
                 ]),
                 "",
-                "Silakan buka aplikasi untuk menyetujui atau menolak pengajuan."
+                "*Tindak lanjuti pengajuan:*",
+                employeeApprovalLink
               ),
             }]
           : []),

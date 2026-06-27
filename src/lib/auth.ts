@@ -1,9 +1,11 @@
 import jwt from "jsonwebtoken";
+import type { SignOptions } from "jsonwebtoken";
+import { createHash, randomBytes } from "crypto";
 
 type Role = "ADMIN" | "EMPLOYEE";
 
 const JWT_SECRET = process.env.JWT_SECRET || "shiftmaster-pro-secret-key-2026";
-const JWT_EXPIRY = "7d";
+const JWT_EXPIRY = (process.env.JWT_EXPIRY || "365d") as SignOptions["expiresIn"];
 
 export interface TokenPayload {
   userId: string;
@@ -25,8 +27,7 @@ export function verifyToken(token: string): TokenPayload | null {
 }
 
 export function hashPassword(password: string): string {
-  const crypto = require("crypto");
-  return crypto.createHash("sha256").update(password).digest("hex");
+  return createHash("sha256").update(password).digest("hex");
 }
 
 export function comparePassword(password: string, hash: string): boolean {
@@ -34,6 +35,5 @@ export function comparePassword(password: string, hash: string): boolean {
 }
 
 export function generateResetToken(): string {
-  const crypto = require("crypto");
-  return crypto.randomBytes(32).toString("hex");
+  return randomBytes(32).toString("hex");
 }

@@ -2,20 +2,27 @@
 
 import { useState } from "react";
 import { ShiftType } from "@/data/adminData";
+import { useAuth } from "@/lib/authContext";
 
 interface SaveActionsProps {
   schedule: Record<string, Record<string, ShiftType>>;
-  onPublishSuccess?: () => void;
+  month: number;
+  year: number;
+  onSaveSuccess?: (action: SaveAction) => void;
 }
 
 type ApiShiftType = "PAGI" | "MIDDLE" | "SIANG" | "MALAM" | "LIBUR" | "CUTI" | "SAKIT" | "TURUN";
+type SaveAction = "draft" | "publish";
 
-export default function SaveActions({ schedule, onPublishSuccess }: SaveActionsProps) {
+export default function SaveActions({ schedule, month, year, onSaveSuccess }: SaveActionsProps) {
+  const { token } = useAuth();
   const [status, setStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [activeAction, setActiveAction] = useState<SaveAction | null>(null);
   const [message, setMessage] = useState("");
 
-  const handlePublish = async () => {
+  const handleSave = async (action: SaveAction) => {
     setStatus("saving");
+    setActiveAction(action);
     setMessage("");
 
     try {
@@ -41,8 +48,11 @@ export default function SaveActions({ schedule, onPublishSuccess }: SaveActionsP
 
       const response = await fetch("/api/schedules/bulk-save", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ schedules }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ schedules, action, month, year }),
       });
 
       const result = await response.json();
@@ -50,7 +60,7 @@ export default function SaveActions({ schedule, onPublishSuccess }: SaveActionsP
       if (response.ok) {
         setStatus("success");
         setMessage(result.message || "Jadwal berhasil disimpan!");
-        onPublishSuccess?.();
+        onSaveSuccess?.(action);
         setTimeout(() => setStatus("idle"), 3000);
       } else {
         setStatus("error");
@@ -65,65 +75,39 @@ export default function SaveActions({ schedule, onPublishSuccess }: SaveActionsP
     }
   };
 
-  const getButtonClasses = () => {
-    const base = "w-full h-12 font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all";
-    if (status === "success") {
-      return `${base} bg-green-600 text-white`;
-    }
-    if (status === "error") {
-      return `${base} bg-error text-on-error`;
-    }
-    if (status === "saving") {
-      return `${base} bg-primary text-on-primary opacity-50`;
-    }
-    return `${base} bg-primary text-on-primary`;
-  };
-
-  const getButtonText = () => {
-    if (status === "success") {
-      return (
-        <>
-          <span className="material-symbols-outlined">check</span>
-          {message}
-        </>
-      );
-    }
-    if (status === "error") {
-      return (
-        <>
-          <span className="material-symbols-outlined">error</span>
-          {message}
-        </>
-      );
-    }
-    if (status === "saving") {
-      return (
-        <>
-          <span className="material-symbols-outlined animate-spin">progress_activity</span>
-          Menyimpan...
-        </>
-      );
-    }
-    return (
-      <>
-        <span className="material-symbols-outlined">save</span>
-        Simpan & Publish Jadwal
-      </>
-    );
-  };
-
   return (
     <section className="px-container-margin mt-auto pt-4">
-      <button
-        onClick={handlePublish}
-        disabled={status === "saving"}
-        className={getButtonClasses()}
-      >
-        {getButtonText()}
-      </button>
-      <p className="text-center text-[10px] text-outline mt-2">
-        Jadwal akan langsung tersedia untuk pegawai setelah disimpan
-      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button
+          onClick={() => handleSave("draft")}
+          disabled={status === "saving" || !token}
+          className="h-12 font-bold rounded-xl flex items-center justify-center gap-2 border border-primary text-primary bg-surface active:scale-95 transition-all disabled:opacity-50"
+        >
+          <span className={`material-symbols-outlined ${status === "saving" && activeAction === "draft" ? "animate-spin" : ""}`}>
+            {status === "saving" && activeAction === "draft" ? "progress_activity" : "draft"}
+          </span>
+          {status === "saving" && activeAction === "draft" ? "Menyimpan..." : "Simpan Draft"}
+        </button>
+        <button
+          onClick={() => handleSave("publish")}
+          disabled={status === "saving" || !token}
+          className="h-12 font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm bg-primary text-on-primary active:scale-95 transition-all disabled:opacity-50"
+        >
+          <span className={`material-symbols-outlined ${status === "saving" && activeAction === "publish" ? "animate-spin" : ""}`}>
+            {status === "saving" && activeAction === "publish" ? "progress_activity" : "publish"}
+          </span>
+          {status === "saving" && activeAction === "publish" ? "Mempublish..." : "Simpan & Publish"}
+        </button>
+      </div>
+      {message ? (
+        <p className={`text-center text-xs mt-2 ${status === "error" ? "text-error" : "text-green-700"}`}>
+          {message}
+        </p>
+      ) : (
+        <p className="text-center text-[10px] text-outline mt-2">
+          Draft hanya terlihat admin. Publish akan menampilkan jadwal kepada pegawai.
+        </p>
+      )}
     </section>
   );
 }

@@ -1,5 +1,17 @@
 # Operasional produksi
 
+## URL aplikasi dan masa sesi
+
+Tambahkan konfigurasi berikut pada `.env` produksi agar link approval WhatsApp selalu memakai domain publik:
+
+```env
+APP_URL="https://domain-aplikasi.example"
+JWT_EXPIRY="365d"
+APPROVAL_LINK_EXPIRY="7d"
+```
+
+`JWT_EXPIRY` mengatur lama sesi login pada perangkat. `APPROVAL_LINK_EXPIRY` mengatur masa berlaku link approval WhatsApp.
+
 ## Database dan migration
 
 Jalankan migration `prisma/migrations/` memakai owner database atau role yang mempunyai hak `CREATE`, `ALTER`, dan `GRANT`. User aplikasi hanya perlu `SELECT`, `INSERT`, `UPDATE`, dan `DELETE` pada semua tabel aplikasi.

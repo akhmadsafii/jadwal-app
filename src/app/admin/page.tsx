@@ -9,6 +9,7 @@ import SaveActions from "@/components/admin/SaveActions";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import { ShiftType } from "@/data/adminData";
 import { getDateKeyFromApi } from "@/lib/dateKeys";
+import { useAuth } from "@/lib/authContext";
 
 interface AdminStaff {
   id: string;
@@ -33,6 +34,7 @@ function getDateKey(date: Date): string {
 }
 
 export default function AdminSchedulePage() {
+  const { token, isLoading: isLoadingAuth } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { month: now.getMonth() + 1, year: now.getFullYear() };
@@ -45,6 +47,8 @@ export default function AdminSchedulePage() {
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [hasDraft, setHasDraft] = useState(false);
 
   const toAdminStaff = (employee: any, loadedSchedule: Record<string, Record<string, ShiftType>> = {}): AdminStaff => {
     const today = new Date();
@@ -60,6 +64,7 @@ export default function AdminSchedulePage() {
 
   useEffect(() => {
     const fetchStaffAndSchedule = async () => {
+      if (isLoadingAuth || !token) return;
       setIsLoadingStaff(true);
       setLoadError("");
 
@@ -73,13 +78,17 @@ export default function AdminSchedulePage() {
         const employees = usersData.users || [];
         setStaff(employees.map((employee: any) => toAdminStaff(employee)));
 
-        const scheduleResponse = await fetch(`/api/schedules?month=${currentMonth.month}&year=${currentMonth.year}&includePendingRequests=1`);
+        const scheduleResponse = await fetch(
+          `/api/schedules?month=${currentMonth.month}&year=${currentMonth.year}&includePendingRequests=1&includeDrafts=1`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
 
         if (!scheduleResponse.ok) {
           return;
         }
 
         const data = await scheduleResponse.json();
+        setHasDraft(Boolean(data.hasDraft));
         const loadedSchedule: Record<string, Record<string, ShiftType>> = {};
         const lockedSchedule: Record<string, Record<string, boolean>> = {};
         const requestMeta: Record<string, Record<string, RequestScheduleMeta>> = {};
@@ -121,7 +130,7 @@ export default function AdminSchedulePage() {
     };
 
     fetchStaffAndSchedule();
-  }, [currentMonth.month, currentMonth.year]);
+  }, [currentMonth.month, currentMonth.year, isLoadingAuth, token]);
 
   const handleShiftChange = (staffId: string, date: Date, shift: ShiftType) => {
     const dateKey = getDateKey(date);
@@ -234,7 +243,11 @@ export default function AdminSchedulePage() {
     });
   };
 
-  const handlePublishSuccess = () => {
+  const handleSaveSuccess = (action: "draft" | "publish") => {
+    setHasDraft(action === "draft");
+    setSuccessMessage(action === "draft"
+      ? "Draft tersimpan dan hanya terlihat oleh admin."
+      : "Jadwal berhasil dipublish ke pegawai!");
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -244,6 +257,12 @@ export default function AdminSchedulePage() {
       <AdminTopBar />
 
       <main className="flex-1 w-full flex flex-col gap-4 py-4 overflow-x-hidden">
+        {hasDraft && (
+          <div className="mx-container-margin rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-center gap-2">
+            <span className="material-symbols-outlined">draft</span>
+            Anda sedang mengedit versi draft. Pegawai masih melihat jadwal terakhir yang dipublish.
+          </div>
+        )}
         <CoverageSummary />
         <QuickActions
           onAutoFill={handleAutoFill}
@@ -276,7 +295,9 @@ export default function AdminSchedulePage() {
             />
             <SaveActions
               schedule={schedule}
-              onPublishSuccess={handlePublishSuccess}
+              month={currentMonth.month}
+              year={currentMonth.year}
+              onSaveSuccess={handleSaveSuccess}
             />
           </>
         )}
@@ -285,7 +306,7 @@ export default function AdminSchedulePage() {
       {showSuccess && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
           <span className="material-symbols-outlined">check_circle</span>
-          Jadwal berhasil dipublish!
+          {successMessage}
         </div>
       )}
 
