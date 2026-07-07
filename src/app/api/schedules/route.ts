@@ -108,13 +108,9 @@ export async function GET(request: Request) {
       const approvedRequestDates = new Map<string, string>();
       const pendingRequestDates = new Map<string, string>();
       const requestMeta = new Map<string, { requestId: string; requestStatus: string; requestType: string }>();
-      const lockedRequestDates = new Set<string>();
       visibleRequests.forEach((req) => {
         getRequestDates(req).forEach((date) => {
           const dateKey = toDateKey(date);
-          if (req.status === "APPROVED" && (req.userId === userId || req.swapWithUserId === userId)) {
-            lockedRequestDates.add(dateKey);
-          }
           requestMeta.set(dateKey, {
             requestId: req.id,
             requestStatus: req.status,
@@ -137,7 +133,7 @@ export async function GET(request: Request) {
         scheduleEntries.push({
           date: s.date,
           dateKey,
-          shiftType: approvedRequestDates.get(dateKey) || s.shiftType,
+          shiftType: s.shiftType,
           pendingShiftType: pendingRequestDates.get(dateKey),
           fromRequest: requestMeta.has(dateKey),
           requestStatus: requestMeta.get(dateKey)?.requestStatus,
@@ -274,14 +270,12 @@ export async function GET(request: Request) {
       const approvedRequestDates = new Map<string, string>();
       const pendingRequestDates = new Map<string, string>();
       const requestMeta = new Map<string, { requestId: string; requestStatus: string; requestType: string }>();
-      const lockedRequestDates = new Set<string>();
 
       approvedRequests
         .filter((req) => req.userId === emp.id || req.swapWithUserId === emp.id)
         .forEach((req) => {
           getRequestDates(req).forEach((date) => {
             const dateKey = toDateKey(date);
-            if (req.status === "APPROVED") lockedRequestDates.add(dateKey);
             requestMeta.set(dateKey, {
               requestId: req.id,
               requestStatus: req.status,
@@ -301,7 +295,7 @@ export async function GET(request: Request) {
         scheduleEntries.push({
           date: s.date,
           dateKey,
-          shiftType: approvedRequestDates.get(dateKey) || s.shiftType,
+          shiftType: s.shiftType,
           pendingShiftType: pendingRequestDates.get(dateKey),
           fromRequest: requestMeta.has(dateKey),
           requestStatus: requestMeta.get(dateKey)?.requestStatus,

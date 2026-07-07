@@ -16,16 +16,13 @@ interface ScheduleGridProps {
   staff: AdminStaff[];
   initialDate?: Date;
   initialSchedule?: Record<string, Record<string, ShiftType>>;
-  requestLockedSchedule?: Record<string, Record<string, boolean>>;
   requestScheduleMeta?: Record<string, Record<string, {
-    locked: boolean;
     status: "PENDING" | "APPROVED";
     requestId?: string;
     type?: string;
   }>>;
   onMonthChange?: (value: { month: number; year: number }) => void;
   onShiftChange?: (staffId: string, date: Date, shift: ShiftType) => void;
-  onUnlockRequest?: (staffId: string, date: Date) => void;
   onBulkShift?: (shift: ShiftType) => void;
 }
 
@@ -43,15 +40,27 @@ function getMonthDays(date: Date): Date[] {
   return Array.from({ length: daysInMonth }, (_, index) => new Date(year, month, index + 1));
 }
 
+const shiftStatisticStyles: Record<ShiftType, string> = {
+  PAGI: "border-primary/25 bg-primary/10 text-primary",
+  MIDDLE: "border-tertiary/25 bg-tertiary/10 text-tertiary",
+  SIANG: "border-tertiary/25 bg-tertiary/10 text-tertiary",
+  MALAM: "border-secondary/25 bg-secondary/10 text-secondary",
+  LIBUR: "border-outline-variant bg-surface-container-high text-outline",
+  CUTI: "border-primary/25 bg-primary/10 text-primary",
+  SAKIT: "border-error/25 bg-error-container/70 text-error",
+  TURUN: "border-error/25 bg-error/10 text-error",
+};
+
+const priorityStatisticShifts: ShiftType[] = ["PAGI", "MIDDLE", "SIANG", "MALAM"];
+const secondaryStatisticShifts: ShiftType[] = ["LIBUR", "CUTI", "SAKIT", "TURUN"];
+
 export default function ScheduleGrid({
   staff,
   initialDate = new Date(),
   initialSchedule = {},
-  requestLockedSchedule = {},
   requestScheduleMeta = {},
   onMonthChange,
   onShiftChange,
-  onUnlockRequest,
   onBulkShift,
 }: ScheduleGridProps) {
   const [currentDate, setCurrentDate] = useState(initialDate);
@@ -66,10 +75,14 @@ export default function ScheduleGrid({
   );
 
   useEffect(() => {
+    // initialSchedule berasal dari data API/admin page dan perlu menimpa draft lokal saat bulan/data berubah.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSchedule(initialSchedule);
   }, [initialSchedule]);
 
   useEffect(() => {
+    // initialDate berubah saat parent mengganti bulan, jadi state navigasi lokal perlu disinkronkan.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentDate(initialDate);
   }, [initialDate]);
 
@@ -91,13 +104,7 @@ export default function ScheduleGrid({
     setSelectedCell(null);
   };
 
-  const getShift = (staffId: string, date: Date): ShiftType | null => {
-    const dateKey = getDateKey(date);
-    return schedule[staffId]?.[dateKey] ?? null;
-  };
-
   const applySelectedShift = (staffId: string, date: Date) => {
-    if (requestLockedSchedule[staffId]?.[getDateKey(date)]) return;
     setSelectedCell({ staffId, date });
     if (!selectedShift) return;
     updateShift(staffId, date, selectedShift);
@@ -126,7 +133,6 @@ export default function ScheduleGrid({
 
   const updateShift = (staffId: string, date: Date, shift: ShiftType) => {
     const dateKey = getDateKey(date);
-    if (requestLockedSchedule[staffId]?.[dateKey]) return;
     setSchedule((prev) => ({
       ...prev,
       [staffId]: {
@@ -145,7 +151,6 @@ export default function ScheduleGrid({
   const fillRowWithShift = (staffId: string, shift: ShiftType | null) => {
     if (!shift) return;
     monthDays.forEach((date) => {
-      if (requestLockedSchedule[staffId]?.[getDateKey(date)]) return;
       updateShift(staffId, date, shift);
     });
   };
@@ -162,7 +167,6 @@ export default function ScheduleGrid({
   const getCellClass = (staffId: string, date: Date): string => {
     const dateKey = getDateKey(date);
     const shift = schedule[staffId]?.[dateKey];
-    const isLockedRequest = requestLockedSchedule[staffId]?.[dateKey];
     const requestMeta = requestScheduleMeta[staffId]?.[dateKey];
     const isSelected =
       selectedCell?.staffId === staffId &&
@@ -170,8 +174,8 @@ export default function ScheduleGrid({
 
     let baseClass =
       "h-10 flex items-center justify-center text-label-sm font-bold rounded cursor-pointer transition-all border ";
-    if (isLockedRequest) {
-      return baseClass + "border-warning bg-warning/15 text-on-surface ring-2 ring-warning/70 cursor-not-allowed";
+    if (requestMeta?.status === "APPROVED") {
+      baseClass += "border-warning bg-warning/10 text-on-surface ring-1 ring-warning/40 ";
     }
     if (requestMeta?.status === "PENDING") {
       baseClass += "border-secondary bg-secondary-container/60 text-on-secondary-container ring-1 ring-secondary/40 ";
@@ -225,9 +229,33 @@ export default function ScheduleGrid({
     return counts;
   };
 
-  const isRequestLocked = (staffId: string, date: Date) => {
-    return Boolean(requestLockedSchedule[staffId]?.[getDateKey(date)]);
-  };
+  const dailyShiftCounts = useMemo(() => {
+    return monthDays.reduce((acc, day) => {
+      const dateKey = getDateKey(day);
+      acc[dateKey] = shiftOptions.reduce((shiftAcc, shift) => {
+        shiftAcc[shift] = 0;
+        return shiftAcc;
+      }, {} as Record<ShiftType, number>);
+
+      staff.forEach((member) => {
+        const shift = schedule[member.id]?.[dateKey];
+        if (shift) {
+          acc[dateKey][shift] += 1;
+        }
+      });
+
+      return acc;
+    }, {} as Record<string, Record<ShiftType, number>>);
+  }, [monthDays, schedule, staff]);
+
+  const monthlyShiftTotals = useMemo(() => {
+    return shiftOptions.reduce((acc, shift) => {
+      acc[shift] = monthDays.reduce((total, day) => {
+        return total + (dailyShiftCounts[getDateKey(day)]?.[shift] || 0);
+      }, 0);
+      return acc;
+    }, {} as Record<ShiftType, number>);
+  }, [dailyShiftCounts, monthDays]);
 
   const getRequestMeta = (staffId: string, date: Date) => {
     return requestScheduleMeta[staffId]?.[getDateKey(date)];
@@ -307,7 +335,7 @@ export default function ScheduleGrid({
               </span>
           <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-1 font-bold text-on-surface">
             <span className="h-2 w-2 rounded-full bg-warning" />
-            Approved request, dikunci
+            Approved request
           </span>
           <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-secondary-container px-2 py-1 font-bold text-on-secondary-container">
             <span className="h-2 w-2 rounded-full bg-secondary" />
@@ -411,7 +439,6 @@ export default function ScheduleGrid({
                   </td>
                   {monthDays.map((day, dayIdx) => {
                     const requestMeta = getRequestMeta(member.id, day);
-                    const locked = isRequestLocked(member.id, day);
                     return (
                       <td
                         key={dayIdx}
@@ -429,8 +456,8 @@ export default function ScheduleGrid({
                           onTouchMove={handleCellTouchMove}
                           className={`${getCellClass(member.id, day)} relative group/cell`}
                           title={
-                            locked
-                              ? "Approved request, dikunci. Klik ikon kunci untuk buka revisi."
+                            requestMeta?.status === "APPROVED"
+                              ? "Approved request. Admin tetap bisa mengubah jadwal ini."
                               : requestMeta?.status === "PENDING"
                                 ? "Pending request pegawai, tampil sebagai saran jadwal"
                                 : ""
@@ -438,28 +465,13 @@ export default function ScheduleGrid({
                         >
                           <span className="relative">
                             {getCellContent(member.id, day) || "-"}
-                            {locked && (
+                            {requestMeta?.status === "APPROVED" && (
                               <span className="absolute -right-2 -top-2 h-2 w-2 rounded-full bg-warning" />
                             )}
                             {requestMeta?.status === "PENDING" && (
                               <span className="absolute -right-2 -top-2 h-2 w-2 rounded-full bg-secondary" />
                             )}
                           </span>
-                          {locked && onUnlockRequest && (
-                            <button
-                              type="button"
-                              onMouseDown={(event) => event.stopPropagation()}
-                              onTouchStart={(event) => event.stopPropagation()}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onUnlockRequest(member.id, day);
-                              }}
-                              className="absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-warning shadow-sm opacity-100 sm:opacity-0 sm:group-hover/cell:opacity-100"
-                              title="Buka kunci request"
-                            >
-                              <span className="material-symbols-outlined text-[12px]">lock_open</span>
-                            </button>
-                          )}
                         </div>
                       </td>
                     );
@@ -480,6 +492,79 @@ export default function ScheduleGrid({
               );
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-outline-variant bg-primary/5">
+              <td className="sticky left-0 z-20 w-32 max-w-32 sm:w-56 sm:max-w-56 bg-primary/5 p-2 align-top border-r border-outline-variant">
+                <div className="flex items-center gap-1 text-[11px] font-black text-primary">
+                  <span className="material-symbols-outlined text-[16px]">monitoring</span>
+                  Statistik
+                </div>
+                <p className="mt-0.5 text-[9px] leading-tight text-on-surface-variant">
+                  Per tanggal
+                </p>
+              </td>
+              {monthDays.map((day) => {
+                const dateKey = getDateKey(day);
+                const totalWorking = priorityStatisticShifts.reduce((total, shift) => {
+                  return total + (dailyShiftCounts[dateKey]?.[shift] || 0);
+                }, 0);
+
+                return (
+                  <td
+                    key={`date-stat-${dateKey}`}
+                    className={`min-w-9 sm:min-w-10 border-r border-outline-variant p-1 align-top ${
+                      isToday(day) ? "bg-primary/10" : holidays.has(dateKey) || day.getDay() === 0 ? "bg-error-container/10" : "bg-white"
+                    }`}
+                    title={`Total jaga: ${totalWorking} pegawai`}
+                  >
+                    <div className="mb-1 rounded-md bg-surface-container-low px-1 py-0.5 text-center text-[9px] font-black text-on-surface">
+                      {totalWorking} jaga
+                    </div>
+                    <div className="grid grid-cols-1 gap-0.5">
+                      {priorityStatisticShifts.map((shift) => (
+                        <div
+                          key={`${dateKey}-${shift}`}
+                          className={`flex items-center justify-between rounded px-1 py-0.5 text-[9px] font-bold ${shiftStatisticStyles[shift]}`}
+                          title={`${shiftTypeLabelMap[shift]}: ${dailyShiftCounts[dateKey]?.[shift] || 0} pegawai`}
+                        >
+                          <span>{shiftTypeShortLabel[shift]}</span>
+                          <span>{dailyShiftCounts[dateKey]?.[shift] || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1 flex flex-wrap justify-center gap-0.5">
+                      {secondaryStatisticShifts.map((shift) => {
+                        const count = dailyShiftCounts[dateKey]?.[shift] || 0;
+                        if (count === 0) return null;
+
+                        return (
+                          <span
+                            key={`${dateKey}-${shift}`}
+                            className={`rounded px-1 py-0.5 text-[8px] font-black ${shiftStatisticStyles[shift]}`}
+                            title={`${shiftTypeLabelMap[shift]}: ${count} pegawai`}
+                          >
+                            {shiftTypeShortLabel[shift]} {count}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </td>
+                );
+              })}
+              {shiftOptions.map((shift) => (
+                <td
+                  key={`month-stat-${shift}`}
+                  className="border-r border-outline-variant bg-primary/5 p-2 text-center align-middle text-[11px] font-black text-primary"
+                  title={`Total ${shiftTypeLabelMap[shift]} bulan ini`}
+                >
+                  {monthlyShiftTotals[shift] || "-"}
+                </td>
+              ))}
+              <td className="bg-primary/5 p-2 text-center text-[11px] font-bold text-outline">
+                -
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>

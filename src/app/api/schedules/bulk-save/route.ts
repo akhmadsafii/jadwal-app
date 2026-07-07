@@ -53,6 +53,13 @@ function formatScheduleDate(dateKey: string) {
   });
 }
 
+function formatMonthLabel(date: Date) {
+  return date.toLocaleDateString("id-ID", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function getRequestTypeLabel(type: string, hasEndDate: boolean) {
   if (type === "TUKAR_SHIFT" && hasEndDate) return "Tukar Hari";
   const labels: Record<string, string> = {
@@ -78,6 +85,14 @@ const shiftLabels: Record<ShiftType | "NONE", string> = {
   TURUN: "Turun Jaga",
   NONE: "Belum ada jadwal",
 };
+
+function groupByUser<T extends { userId: string }>(items: T[]) {
+  const grouped = new Map<string, T[]>();
+  items.forEach((item) => {
+    grouped.set(item.userId, [...(grouped.get(item.userId) || []), item]);
+  });
+  return grouped;
+}
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -210,51 +225,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Pilihan penyimpanan tidak valid" }, { status: 400 });
     }
 
-    const requestedDates = new Set<string>();
     const userIds = [...new Set(schedules.map((item) => item.userId))];
     const parsedDates = schedules.map((item) => parseDateKey(item.date));
     const minDate = new Date(Math.min(...parsedDates.map((date) => date.getTime())));
     const maxDate = new Date(Math.max(...parsedDates.map((date) => date.getTime())));
-
-    const approvedRequests = await prisma.shiftRequest.findMany({
-      where: {
-        status: "APPROVED",
-        type: {
-          in: ["SHIFT_PAGI", "SHIFT_MIDDLE", "SHIFT_SIANG", "SHIFT_MALAM", "CUTI_TAHUNAN", "CUTI_SAKIT", "LIBUR", "TUKAR_SHIFT"],
-        },
-        OR: [
-          { userId: { in: userIds } },
-          { swapWithUserId: { in: userIds } },
-        ],
-        startDate: { lte: maxDate },
-        AND: [{
-          OR: [
-            { endDate: null },
-            { endDate: { gte: minDate } },
-          ],
-        }],
-      },
-      select: {
-        type: true,
-        userId: true,
-        swapWithUserId: true,
-        startDate: true,
-        endDate: true,
-      },
-    });
-
-    approvedRequests.forEach((request) => {
-      getRequestDates(request).forEach((date) => {
-        requestedDates.add(`${request.userId}-${toDateKey(date)}`);
-        if (request.swapWithUserId) {
-          requestedDates.add(`${request.swapWithUserId}-${toDateKey(date)}`);
-        }
-      });
-    });
-
-    const editableSchedules = schedules.filter((item) => {
-      return !requestedDates.has(`${item.userId}-${item.date}`);
-    });
+    const editableSchedules = schedules;
 
     const scopeStart = month && year
       ? new Date(year, month - 1, 1)
@@ -299,7 +274,7 @@ export async function POST(request: Request) {
         action: "draft",
         message: `Draft tersimpan (${results.length} jadwal). Draft hanya terlihat oleh admin.`,
         count: results.length,
-        skippedRequestSchedules: schedules.length - editableSchedules.length,
+        skippedRequestSchedules: 0,
       });
     }
 
@@ -518,39 +493,18 @@ export async function POST(request: Request) {
           })),
         }).catch((error) => console.error("Publish approval audit logs skipped:", error)),
       ]);
-
-      await sendWhatsAppMessages(
-        pendingAdminRequests.map((pendingRequest) => {
-          const startLabel = formatScheduleDate(toDateKey(pendingRequest.startDate));
-          const endLabel = pendingRequest.endDate
-            ? formatScheduleDate(toDateKey(pendingRequest.endDate))
-            : null;
-          return {
-            number: pendingRequest.user.phone,
-            message: whatsAppText(
-              whatsAppTitle("Pengajuan Disetujui"),
-              "",
-              `Yth. ${pendingRequest.user.name || "Pegawai"},`,
-              "Pengajuan Anda disetujui otomatis saat jadwal bulan dipublish.",
-              "",
-              whatsAppCodeBlock([
-                `Jenis   : ${getRequestTypeLabel(pendingRequest.type, Boolean(pendingRequest.endDate))}`,
-                `Tanggal : ${endLabel ? `${startLabel} -> ${endLabel}` : startLabel}`,
-                "Status  : DISETUJUI",
-              ]),
-              "",
-              "Silakan cek aplikasi untuk melihat jadwal terbaru."
-            ),
-          };
-        })
-      );
     }
 
-    if (changedSchedules.length > 0) {
-      const changedUserIds = [...new Set(changedSchedules.map((item) => item.userId))];
+    if (changedSchedules.length > 0 || pendingAdminRequests.length > 0) {
+      const whatsappUserIds = [
+        ...new Set([
+          ...changedSchedules.map((item) => item.userId),
+          ...pendingAdminRequests.map((requestItem) => requestItem.userId),
+        ]),
+      ];
       const users = await prisma.user.findMany({
         where: {
-          id: { in: changedUserIds },
+          id: { in: whatsappUserIds },
           phone: { not: null },
         },
         select: {
@@ -559,33 +513,51 @@ export async function POST(request: Request) {
           phone: true,
         },
       });
-      const changesByUser = new Map<string, ScheduleItem[]>();
-      changedSchedules.forEach((item) => {
-        changesByUser.set(item.userId, [...(changesByUser.get(item.userId) || []), item]);
-      });
+      const changesByUser = groupByUser(changedSchedules);
+      const approvedRequestsByUser = groupByUser(pendingAdminRequests);
+      const monthLabel = formatMonthLabel(scopeStart);
 
       await sendWhatsAppMessages(
         users.map((user) => {
           const userChanges = (changesByUser.get(user.id) || [])
             .sort((a, b) => a.date.localeCompare(b.date));
-          const detailLines = userChanges.slice(0, 8).map((item) => {
+          const userApprovedRequests = (approvedRequestsByUser.get(user.id) || [])
+            .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+          const approvedRequestLines = userApprovedRequests.slice(0, 5).map((requestItem) => {
+            const startLabel = formatScheduleDate(toDateKey(requestItem.startDate));
+            const endLabel = requestItem.endDate
+              ? formatScheduleDate(toDateKey(requestItem.endDate))
+              : null;
+            return `${getRequestTypeLabel(requestItem.type, Boolean(requestItem.endDate))}: ${endLabel ? `${startLabel} -> ${endLabel}` : startLabel}`;
+          });
+          const remainingApprovedRequestCount = userApprovedRequests.length - approvedRequestLines.length;
+          const detailLines = userChanges.slice(0, 10).map((item) => {
             const previousShift = existingMap.get(getScheduleKey(item.userId, item.date)) || "NONE";
-            return `${formatScheduleDate(item.date)}: ${shiftLabels[previousShift]} menjadi ${shiftLabels[item.shiftType]}`;
+            return `${formatScheduleDate(item.date)}: ${shiftLabels[previousShift]} -> ${shiftLabels[item.shiftType]}`;
           });
           const remainingCount = userChanges.length - detailLines.length;
 
           return {
             number: user.phone,
             message: whatsAppText(
-              whatsAppTitle("Notifikasi Perubahan Jadwal"),
+              whatsAppTitle("Update Jadwal Pegawai"),
               "",
               `Yth. ${user.name},`,
-              "Jadwal Anda telah diperbarui oleh admin.",
+              `Jadwal bulan ${monthLabel} sudah dipublish oleh admin.`,
+              "Berikut ringkasan yang perlu diperhatikan:",
               "",
-              whatsAppCodeBlock(detailLines),
+              approvedRequestLines.length > 0 ? "*Pengajuan disetujui otomatis:*" : null,
+              approvedRequestLines.length > 0 ? whatsAppCodeBlock(approvedRequestLines) : null,
+              remainingApprovedRequestCount > 0 ? `_${remainingApprovedRequestCount} pengajuan lainnya juga disetujui otomatis._` : null,
+              approvedRequestLines.length > 0 ? "" : null,
+              detailLines.length > 0 ? "*Perubahan jadwal Anda:*" : null,
+              detailLines.length > 0 ? whatsAppCodeBlock(detailLines) : null,
               remainingCount > 0 ? `_${remainingCount} perubahan jadwal lainnya tersedia di aplikasi._` : null,
               "",
-              "Silakan cek aplikasi untuk melihat detail jadwal terbaru."
+              `Total perubahan jadwal: ${userChanges.length}`,
+              `Total pengajuan disetujui otomatis: ${userApprovedRequests.length}`,
+              "",
+              "Silakan cek aplikasi untuk melihat jadwal lengkap terbaru."
             ),
           };
         })
@@ -599,7 +571,7 @@ export async function POST(request: Request) {
       count: results.length,
       approvedRequestCount: pendingAdminRequests.length,
       pendingEmployeeSwapCount,
-      skippedRequestSchedules: schedules.length - editableSchedules.length,
+      skippedRequestSchedules: 0,
       leaveAdjustments: Object.fromEntries(leaveDeltaByUser),
     });
   } catch (error) {

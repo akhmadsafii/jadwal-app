@@ -20,10 +20,27 @@ interface AdminStaff {
 }
 
 interface RequestScheduleMeta {
-  locked: boolean;
   status: "PENDING" | "APPROVED";
   requestId?: string;
   type?: string;
+}
+
+interface ApiEmployee {
+  id: string;
+  name: string;
+  nip: string;
+  avatarUrl?: string | null;
+  schedule?: ApiScheduleAssignment[];
+}
+
+interface ApiScheduleAssignment {
+  date: string;
+  dateKey?: string;
+  shiftType: ShiftType;
+  fromRequest?: boolean;
+  requestStatus?: "PENDING" | "APPROVED";
+  requestId?: string;
+  requestType?: string;
 }
 
 function getDateKey(date: Date): string {
@@ -42,7 +59,6 @@ export default function AdminSchedulePage() {
   const [schedule, setSchedule] = useState<Record<string, Record<string, ShiftType>>>({});
   const [staff, setStaff] = useState<AdminStaff[]>([]);
   const [initialSchedule, setInitialSchedule] = useState<Record<string, Record<string, ShiftType>>>({});
-  const [requestLockedSchedule, setRequestLockedSchedule] = useState<Record<string, Record<string, boolean>>>({});
   const [requestScheduleMeta, setRequestScheduleMeta] = useState<Record<string, Record<string, RequestScheduleMeta>>>({});
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -50,7 +66,7 @@ export default function AdminSchedulePage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [hasDraft, setHasDraft] = useState(false);
 
-  const toAdminStaff = (employee: any, loadedSchedule: Record<string, Record<string, ShiftType>> = {}): AdminStaff => {
+  const toAdminStaff = (employee: ApiEmployee, loadedSchedule: Record<string, Record<string, ShiftType>> = {}): AdminStaff => {
     const today = new Date();
     const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     return {
@@ -75,8 +91,8 @@ export default function AdminSchedulePage() {
         }
 
         const usersData = await usersResponse.json();
-        const employees = usersData.users || [];
-        setStaff(employees.map((employee: any) => toAdminStaff(employee)));
+        const employees = (usersData.users || []) as ApiEmployee[];
+        setStaff(employees.map((employee) => toAdminStaff(employee)));
 
         const scheduleResponse = await fetch(
           `/api/schedules?month=${currentMonth.month}&year=${currentMonth.year}&includePendingRequests=1&includeDrafts=1`,
@@ -90,36 +106,30 @@ export default function AdminSchedulePage() {
         const data = await scheduleResponse.json();
         setHasDraft(Boolean(data.hasDraft));
         const loadedSchedule: Record<string, Record<string, ShiftType>> = {};
-        const lockedSchedule: Record<string, Record<string, boolean>> = {};
         const requestMeta: Record<string, Record<string, RequestScheduleMeta>> = {};
-        (data.employees || []).forEach((employee: any) => {
+        const scheduleEmployees = (data.employees || []) as ApiEmployee[];
+        scheduleEmployees.forEach((employee) => {
           loadedSchedule[employee.id] = {};
-          lockedSchedule[employee.id] = {};
           requestMeta[employee.id] = {};
-          employee.schedule?.forEach((assignment: any) => {
+          employee.schedule?.forEach((assignment) => {
             const dateKey = assignment.dateKey || getDateKeyFromApi(assignment.date);
             loadedSchedule[employee.id][dateKey] = assignment.shiftType;
             if (assignment.fromRequest) {
               const isApproved = assignment.requestStatus === "APPROVED";
               requestMeta[employee.id][dateKey] = {
-                locked: isApproved,
                 status: isApproved ? "APPROVED" : "PENDING",
                 requestId: assignment.requestId,
                 type: assignment.requestType,
               };
-              if (isApproved) {
-                lockedSchedule[employee.id][dateKey] = true;
-              }
             }
           });
         });
 
         setStaff(
-          employees.map((employee: any) => toAdminStaff(employee, loadedSchedule))
+          employees.map((employee) => toAdminStaff(employee, loadedSchedule))
         );
         setInitialSchedule(loadedSchedule);
         setSchedule(loadedSchedule);
-        setRequestLockedSchedule(lockedSchedule);
         setRequestScheduleMeta(requestMeta);
       } catch (error) {
         console.error("Failed to load admin schedule data:", error);
@@ -134,7 +144,6 @@ export default function AdminSchedulePage() {
 
   const handleShiftChange = (staffId: string, date: Date, shift: ShiftType) => {
     const dateKey = getDateKey(date);
-    if (requestLockedSchedule[staffId]?.[dateKey]) return;
     setSchedule((prev) => ({
       ...prev,
       [staffId]: {
@@ -153,10 +162,6 @@ export default function AdminSchedulePage() {
       newSchedule[member.id] = {};
       for (let day = 1; day <= daysInMonth; day++) {
         const dateKey = `${currentMonth.year}-${String(currentMonth.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        if (requestLockedSchedule[member.id]?.[dateKey]) {
-          newSchedule[member.id][dateKey] = schedule[member.id]?.[dateKey] || "LIBUR";
-          continue;
-        }
         const shiftIndex = (staffIdx + day - 1) % shifts.length;
         newSchedule[member.id][dateKey] = shifts[shiftIndex];
       }
@@ -169,7 +174,6 @@ export default function AdminSchedulePage() {
   const handleBulkCopy = () => {
     // Copy from previous week - simplified implementation
     const newSchedule = { ...schedule };
-    const today = new Date();
 
     staff.forEach((member) => {
       const staffSchedule = schedule[member.id];
@@ -179,7 +183,6 @@ export default function AdminSchedulePage() {
           const date = new Date(dateKey);
           date.setDate(date.getDate() + 7);
           const newDateKey = getDateKey(date);
-          if (requestLockedSchedule[member.id]?.[newDateKey]) return;
           if (!newSchedule[member.id]) {
             newSchedule[member.id] = {};
           }
@@ -194,53 +197,9 @@ export default function AdminSchedulePage() {
 
   const handleClearAll = () => {
     if (confirm("Apakah Anda yakin ingin menghapus semua perubahan jadwal bulan ini?")) {
-      const lockedOnly: Record<string, Record<string, ShiftType>> = {};
-      Object.entries(requestLockedSchedule).forEach(([staffId, dates]) => {
-        Object.keys(dates).forEach((dateKey) => {
-          const shift = schedule[staffId]?.[dateKey];
-          if (!shift) return;
-          if (!lockedOnly[staffId]) lockedOnly[staffId] = {};
-          lockedOnly[staffId][dateKey] = shift;
-        });
-      });
-      setSchedule(lockedOnly);
-      setInitialSchedule(lockedOnly);
+      setSchedule({});
+      setInitialSchedule({});
     }
-  };
-
-  const handleUnlockRequest = async (staffId: string, date: Date) => {
-    const dateKey = getDateKey(date);
-    const meta = requestScheduleMeta[staffId]?.[dateKey];
-    if (!meta?.requestId) return;
-
-    const confirmed = confirm("Buka kunci request ini? Status request akan ditandai ditolak agar jadwal bisa direvisi admin.");
-    if (!confirmed) return;
-
-    const response = await fetch("/api/requests/update", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        requestId: meta.requestId,
-        status: "REJECTED",
-        adminNotes: "Kunci request dibuka untuk revisi jadwal admin.",
-      }),
-    });
-
-    if (!response.ok) {
-      alert("Gagal membuka kunci request.");
-      return;
-    }
-
-    setRequestLockedSchedule((prev) => {
-      const next = { ...prev, [staffId]: { ...(prev[staffId] || {}) } };
-      delete next[staffId][dateKey];
-      return next;
-    });
-    setRequestScheduleMeta((prev) => {
-      const next = { ...prev, [staffId]: { ...(prev[staffId] || {}) } };
-      delete next[staffId][dateKey];
-      return next;
-    });
   };
 
   const handleSaveSuccess = (action: "draft" | "publish") => {
@@ -287,11 +246,9 @@ export default function AdminSchedulePage() {
               staff={staff}
               initialDate={new Date(currentMonth.year, currentMonth.month - 1, 1)}
               initialSchedule={initialSchedule}
-              requestLockedSchedule={requestLockedSchedule}
               requestScheduleMeta={requestScheduleMeta}
               onMonthChange={setCurrentMonth}
               onShiftChange={handleShiftChange}
-              onUnlockRequest={handleUnlockRequest}
             />
             <SaveActions
               schedule={schedule}

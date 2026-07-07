@@ -21,10 +21,6 @@ export default function SaveActions({ schedule, month, year, onSaveSuccess }: Sa
   const [message, setMessage] = useState("");
 
   const handleSave = async (action: SaveAction) => {
-    setStatus("saving");
-    setActiveAction(action);
-    setMessage("");
-
     try {
       // Convert schedule to API format
       const schedules: { userId: string; date: string; shiftType: ApiShiftType }[] = [];
@@ -45,6 +41,26 @@ export default function SaveActions({ schedule, month, year, onSaveSuccess }: Sa
         setTimeout(() => setStatus("idle"), 3000);
         return;
       }
+
+      if (action === "publish") {
+        const monthName = new Date(year, month - 1, 1).toLocaleDateString("id-ID", {
+          month: "long",
+          year: "numeric",
+        });
+        const confirmed = window.confirm(
+          `Publish jadwal ${monthName}?\n\n` +
+            "Setelah dipublish, jadwal akan terlihat oleh pegawai dan request yang sesuai bulan ini akan diproses/diapprove otomatis.\n\n" +
+            "Lanjutkan publish?"
+        );
+
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      setStatus("saving");
+      setActiveAction(action);
+      setMessage("");
 
       const response = await fetch("/api/schedules/bulk-save", {
         method: "POST",
